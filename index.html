@@ -1,135 +1,120 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v1.8</title>
-    <style>
-        canvas {
-            border: 1px solid black;
-            cursor: crosshair;
+<button id="downloadImage">ダウンロード</button>
+
+<script>
+  const uploadInput = document.getElementById('upload');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const applyMosaicBtn = document.getElementById('applyMosaic');
+  const downloadImageBtn = document.getElementById('downloadImage');
+  
+  let img = new Image();
+  let isImageLoaded = false;
+  
+  // 選択範囲
+  let startX, startY, endX, endY;
+  let isSelecting = false;
+  
+  // 編集後の画像データ
+  let editedImageData = null;
+
+  uploadInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      img.onload = function() {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        isImageLoaded = true;
+        // 最初の画像情報を保存
+        editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function drawSelection() {
+    // 編集後画像を再描画してから、赤枠の描画
+    ctx.putImageData(editedImageData, 0, 0);
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+  }
+
+  canvas.addEventListener('mousedown', (event) => {
+    if (!isImageLoaded) return;
+    startX = event.offsetX;
+    startY = event.offsetY;
+    isSelecting = true;
+  });
+
+  canvas.addEventListener('mousemove', (event) => {
+    if (isSelecting) {
+      endX = event.offsetX;
+      endY = event.offsetY;
+      drawSelection();
+    }
+  });
+
+  canvas.addEventListener('mouseup', (event) => {
+    isSelecting = false;
+    // マウスを離した時点でもう一度選択枠を描画
+    drawSelection();
+  });
+
+  applyMosaicBtn.addEventListener('click', () => {
+    if (!isImageLoaded || startX === undefined || endX === undefined) return;
+
+    // 現在キャンバスに描画されているものを取得
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const blockSize = 10;
+
+    for (let y = startY; y < endY; y += blockSize) {
+      for (let x = startX; x < endX; x += blockSize) {
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let dy = 0; dy < blockSize && (y + dy) < endY; dy++) {
+          for (let dx = 0; dx < blockSize && (x + dx) < endX; dx++) {
+            const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+            r += imageData.data[idx];
+            g += imageData.data[idx + 1];
+            b += imageData.data[idx + 2];
+            count++;
+          }
         }
-        #controls {
-            margin-top: 10px;
+        r = Math.floor(r / count);
+        g = Math.floor(g / count);
+        b = Math.floor(b / count);
+
+        for (let dy = 0; dy < blockSize && (y + dy) < endY; dy++) {
+          for (let dx = 0; dx < blockSize && (x + dx) < endX; dx++) {
+            const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+            imageData.data[idx] = r;
+            imageData.data[idx + 1] = g;
+            imageData.data[idx + 2] = b;
+          }
         }
-    </style>
-</head>
-<body>
-    <h1>画像編集アプリ v1.8</h1>
-    <input type="file" id="upload" accept="image/*">
-    <br>
-    <canvas id="canvas"></canvas>
-    <div id="controls">
-        <button id="applyMosaic">モザイク処理</button>
-        <button id="applyTrim">トリミング</button>
-        <button id="downloadImage">ダウンロード</button>
-    </div>
-    <script>
-        const uploadInput = document.getElementById('upload');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const applyMosaicBtn = document.getElementById('applyMosaic');
-        const applyTrimBtn = document.getElementById('applyTrim');
-        const downloadImageBtn = document.getElementById('downloadImage');
-        
-        let img = new Image();
-        let isImageLoaded = false;
-        let startX, startY, endX, endY;
-        let isSelecting = false;
-        let editedImageData = null;
-        
-        uploadInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    img.onload = function() {
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        ctx.drawImage(img, 0, 0);
-                        isImageLoaded = true;
-                        editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-        
-        function drawSelection() {
-            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
-            ctx.putImageData(editedImageData, 0, 0);
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-        }
-        
-        canvas.addEventListener('mousedown', (event) => {
-            if (!isImageLoaded) return;
-            startX = event.offsetX;
-            startY = event.offsetY;
-            isSelecting = true;
-        });
-        
-        canvas.addEventListener('mousemove', (event) => {
-            if (isSelecting) {
-                endX = event.offsetX;
-                endY = event.offsetY;
-                drawSelection();
-            }
-        });
-        
-        canvas.addEventListener('mouseup', (event) => {
-            isSelecting = false;
-            drawSelection();
-        });
-        
-        applyMosaicBtn.addEventListener('click', () => {
-            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
-            
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const blockSize = 10;
-            
-            for (let y = startY; y < endY; y += blockSize) {
-                for (let x = startX; x < endX; x += blockSize) {
-                    let r = 0, g = 0, b = 0, count = 0;
-                    
-                    for (let dy = 0; dy < blockSize && y + dy < endY; dy++) {
-                        for (let dx = 0; dx < blockSize && x + dx < endX; dx++) {
-                            const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
-                            r += imageData.data[idx];
-                            g += imageData.data[idx + 1];
-                            b += imageData.data[idx + 2];
-                            count++;
-                        }
-                    }
-                    
-                    r = Math.floor(r / count);
-                    g = Math.floor(g / count);
-                    b = Math.floor(b / count);
-                    
-                    for (let dy = 0; dy < blockSize && y + dy < endY; dy++) {
-                        for (let dx = 0; dx < blockSize && x + dx < endX; dx++) {
-                            const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
-                            imageData.data[idx] = r;
-                            imageData.data[idx + 1] = g;
-                            imageData.data[idx + 2] = b;
-                        }
-                    }
-                }
-            }
-            ctx.putImageData(imageData, 0, 0);
-            editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        });
-        
-        downloadImageBtn.addEventListener('click', () => {
-            ctx.putImageData(editedImageData, 0, 0); // 赤枠を削除
-            const link = document.createElement('a');
-            link.download = 'edited-image.png';
-            link.href = canvas.toDataURL();
-            link.click();
-            ctx.putImageData(editedImageData, 0, 0); // 赤枠を完全に消してリセット
-        });
-    </script>
-</body>
-</html>
+      }
+    }
+    
+    // モザイクを反映
+    ctx.putImageData(imageData, 0, 0);
+    // 新しく編集後のイメージを保存（これには赤枠が入っていない）
+    editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  });
+
+  downloadImageBtn.addEventListener('click', () => {
+    // ダウンロード直前に編集後データを再描画して、赤枠なしの状態に戻す
+    ctx.putImageData(editedImageData, 0, 0);
+    
+    // 赤枠の選択情報をリセットしたいなら、必要に応じて以下をセット（好みで）
+    // startX = startY = endX = endY = undefined;
+    
+    const link = document.createElement('a');
+    link.download = 'edited-image.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  });
+</script>
