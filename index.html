@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v1.3</title>
+    <title>画像編集アプリ v1.4</title>
     <style>
         canvas {
             border: 1px solid black;
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ v1.3</h1>
+    <h1>画像編集アプリ v1.4</h1>
     <input type="file" id="upload" accept="image/*">
     <br>
     <canvas id="canvas"></canvas>
@@ -36,6 +36,7 @@
         let isImageLoaded = false;
         let startX, startY, endX, endY;
         let isSelecting = false;
+        let editedImageData = null;
         
         uploadInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
@@ -47,7 +48,7 @@
                         canvas.height = img.height;
                         ctx.drawImage(img, 0, 0);
                         isImageLoaded = true;
-                        resetSelection();
+                        editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     };
                     img.src = e.target.result;
                 };
@@ -55,14 +56,9 @@
             }
         });
         
-        function resetSelection() {
-            ctx.drawImage(img, 0, 0);
-            startX = startY = endX = endY = undefined;
-        }
-        
         canvas.addEventListener('mousedown', (event) => {
             if (!isImageLoaded) return;
-            resetSelection();
+            ctx.putImageData(editedImageData, 0, 0); // 既存の編集状態を保持
             isSelecting = true;
             startX = event.offsetX;
             startY = event.offsetY;
@@ -85,18 +81,16 @@
         });
         
         function drawSelection() {
-            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
-            ctx.drawImage(img, 0, 0);
+            if (!isImageLoaded) return;
+            ctx.putImageData(editedImageData, 0, 0);
             ctx.strokeStyle = 'red';
             ctx.lineWidth = 2;
             ctx.strokeRect(startX, startY, endX - startX, endY - startY);
         }
         
         applyMosaicBtn.addEventListener('click', () => {
-            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
-            
+            if (!isImageLoaded) return;
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const pixelData = imageData.data;
             const blockSize = 10;
             
             for (let y = startY; y < endY; y += blockSize) {
@@ -106,9 +100,9 @@
                     for (let dy = 0; dy < blockSize && y + dy < endY; dy++) {
                         for (let dx = 0; dx < blockSize && x + dx < endX; dx++) {
                             const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
-                            r += pixelData[idx];
-                            g += pixelData[idx + 1];
-                            b += pixelData[idx + 2];
+                            r += imageData.data[idx];
+                            g += imageData.data[idx + 1];
+                            b += imageData.data[idx + 2];
                             count++;
                         }
                     }
@@ -120,27 +114,26 @@
                     for (let dy = 0; dy < blockSize && y + dy < endY; dy++) {
                         for (let dx = 0; dx < blockSize && x + dx < endX; dx++) {
                             const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
-                            pixelData[idx] = r;
-                            pixelData[idx + 1] = g;
-                            pixelData[idx + 2] = b;
+                            imageData.data[idx] = r;
+                            imageData.data[idx + 1] = g;
+                            imageData.data[idx + 2] = b;
                         }
                     }
                 }
             }
-            
             ctx.putImageData(imageData, 0, 0);
+            editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         });
         
         applyTrimBtn.addEventListener('click', () => {
-            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
-            
+            if (!isImageLoaded) return;
             const trimWidth = endX - startX;
             const trimHeight = endY - startY;
             const trimmedImage = ctx.getImageData(startX, startY, trimWidth, trimHeight);
-            
             canvas.width = trimWidth;
             canvas.height = trimHeight;
             ctx.putImageData(trimmedImage, 0, 0);
+            editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         });
         
         downloadImageBtn.addEventListener('click', () => {
