@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v2.4</title>
+    <title>画像編集アプリ v2.2</title>
     <style>
         canvas {
             border: 1px solid black;
-            /* スマホやタブレットでのスワイプ動作を防止し、ドラッグ操作をスムーズに */
             touch-action: none;
             cursor: crosshair;
         }
@@ -17,13 +16,13 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ v2.4</h1>
+    <h1>画像編集アプリ v2.2</h1>
     
-    <!-- 画像をアップロードする入力 -->
+    <!-- 画像をアップロード -->
     <input type="file" id="upload" accept="image/*">
     <br><br>
 
-    <!-- 画像を描画するキャンバス -->
+    <!-- キャンバス -->
     <canvas id="canvas"></canvas>
     
     <!-- ボタン類 -->
@@ -35,7 +34,7 @@
         <button id="resetButton">リセット</button>
     </div>
 
-    <!-- 外部スクリプトを読み込む。同ディレクトリに script.js を配置してください -->
+    <!-- スクリプト読み込み -->
     <script src="script.js"></script>
 </body>
 </html>
