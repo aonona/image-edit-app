@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>画像編集アプリ (Pointer Events版)</title>
+  <title>画像編集アプリ (Pointer Events版 + デバッグログ)</title>
   <style>
     canvas {
       border: 1px solid black;
@@ -16,8 +16,8 @@
   </style>
 </head>
 <body>
-  <h1>画像編集アプリ (Pointer Events対応)</h1>
-  <p>PCマウス、スマホタッチの両方で範囲選択ができます。</p>
+  <h1>画像編集アプリ (Pointer Events対応) + デバッグログ</h1>
+  <p>※コンソールを開いてログを確認してください。</p>
 
   <!-- 画像アップロード -->
   <input type="file" id="upload" accept="image/*"><br><br>
@@ -63,12 +63,23 @@
     // Undo用の履歴スタック
     let historyStack = [];
 
+    // モザイクのブロックサイズ (小さいほど細かい)
+    const blockSize = 5;
+    // ※以下のフラグをtrueにすると、モザイクがランダム色になり変化がより分かりやすくなる
+    const debugRandomColor = false;
+
+    console.log("スクリプト読み込み完了。");
+
     // -----------------------------
     // 画像アップロード処理
     // -----------------------------
     uploadInput.addEventListener('change', (event) => {
+      console.log("画像アップロード開始。");
       const file = event.target.files[0];
-      if (!file) return;
+      if (!file) {
+        console.warn("ファイルが選択されなかったのでreturnします。");
+        return;
+      }
 
       const reader = new FileReader();
       reader.onload = function(e) {
@@ -80,6 +91,7 @@
           ctx.drawImage(img, 0, 0);
 
           isImageLoaded = true;
+          console.log("画像読み込み完了:", img.width, "x", img.height);
 
           // 読み込んだ直後の状態を両方に保存
           editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -97,14 +109,16 @@
     // Pointer Events (PC/スマホ対応)
     // -----------------------------
     canvas.addEventListener('pointerdown', (event) => {
-      if (!isImageLoaded) return;
+      if (!isImageLoaded) {
+        console.warn("pointerdown: 画像が未読み込みです。returnします。");
+        return;
+      }
 
-      // キャンバスの見かけサイズと内部解像度の差分を埋めるスケール
+      console.log("pointerdown発生");
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width  / rect.width;
       const scaleY = canvas.height / rect.height;
 
-      // 実際のキャンバス座標を計算
       startX = (event.clientX - rect.left) * scaleX;
       startY = (event.clientY - rect.top)  * scaleY;
 
@@ -127,6 +141,7 @@
     canvas.addEventListener('pointerup', (event) => {
       if (!isSelecting) return;
 
+      console.log("pointerup発生");
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width  / rect.width;
       const scaleY = canvas.height / rect.height;
@@ -140,6 +155,7 @@
 
     // スマホで操作中に外へはみ出すとキャンセルされる場合など
     canvas.addEventListener('pointercancel', () => {
+      console.warn("pointercancel発生。指がキャンバス外に出たなどで中断されました。");
       isSelecting = false;
     });
 
@@ -147,7 +163,10 @@
     // 画面上に赤枠を描画
     // -----------------------------
     function drawSelection() {
-      if (!isImageLoaded) return;
+      if (!isImageLoaded) {
+        console.warn("drawSelection: isImageLoaded=falseなのでreturn");
+        return;
+      }
 
       // まず編集後の画像(赤枠なし)を再描画
       ctx.putImageData(editedImageData, 0, 0);
@@ -158,9 +177,11 @@
         endX   === undefined ||
         endY   === undefined
       ) {
+        // console.log("drawSelection: 未選択状態");
         return;
       }
 
+      // 赤枠を描画
       ctx.strokeStyle = 'red';
       ctx.lineWidth = 2;
       ctx.strokeRect(startX, startY, endX - startX, endY - startY);
@@ -170,14 +191,22 @@
     // モザイク処理
     // -----------------------------
     applyMosaicBtn.addEventListener('click', () => {
-      if (!isImageLoaded ||
-          startX === undefined || startY === undefined ||
-          endX   === undefined || endY   === undefined
+      console.log("モザイクボタンが押されました。");
+
+      if (!isImageLoaded) {
+        console.warn("モザイク: 画像未読み込みのためreturn");
+        return;
+      }
+      if (
+        startX === undefined || startY === undefined ||
+        endX   === undefined || endY   === undefined
       ) {
-        return; // まだ画像や範囲が確定していない
+        console.warn("モザイク: 選択範囲が未確定のためreturn");
+        return;
       }
 
       // 1. Undo用に現在の編集状態を保存
+      console.log("モザイク: Undo用に現在のeditedImageDataをpushします。");
       historyStack.push(editedImageData);
 
       // 2. 赤枠を消す
@@ -185,39 +214,50 @@
 
       // 3. 画像データを取得
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const blockSize = 10; // モザイクの粒度
 
-      // 4. 選択範囲を確定（0～canvas.width/height内にクランプ）
+      // 4. 選択範囲を確定
       let startXInt = Math.min(startX, endX);
       let endXInt   = Math.max(startX, endX);
       let startYInt = Math.min(startY, endY);
       let endYInt   = Math.max(startY, endY);
 
+      // 0～canvas.width/height内にクランプ
       startXInt = Math.max(0, Math.min(canvas.width,  startXInt));
       endXInt   = Math.max(0, Math.min(canvas.width,  endXInt));
       startYInt = Math.max(0, Math.min(canvas.height, startYInt));
       endYInt   = Math.max(0, Math.min(canvas.height, endYInt));
 
+      console.log("モザイク範囲:", { startXInt, endXInt, startYInt, endYInt });
+
       // 5. モザイク適用
       for (let y = startYInt; y < endYInt; y += blockSize) {
         for (let x = startXInt; x < endXInt; x += blockSize) {
-          let r = 0, g = 0, b = 0, count = 0;
-          
-          // ブロック内の平均色を計算
-          for (let dy = 0; dy < blockSize && (y + dy) < endYInt; dy++) {
-            for (let dx = 0; dx < blockSize && (x + dx) < endXInt; dx++) {
-              const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
-              r += imageData.data[idx];
-              g += imageData.data[idx + 1];
-              b += imageData.data[idx + 2];
-              count++;
-            }
-          }
-          const avgR = Math.floor(r / count);
-          const avgG = Math.floor(g / count);
-          const avgB = Math.floor(b / count);
 
-          // ブロック内を平均色で塗りつぶす
+          // (A) ランダム色 or (B) 平均色を計算
+          let avgR, avgG, avgB;
+          if (debugRandomColor) {
+            // ランダム色で塗り潰し
+            avgR = Math.floor(Math.random() * 256);
+            avgG = Math.floor(Math.random() * 256);
+            avgB = Math.floor(Math.random() * 256);
+          } else {
+            // 平均色モザイク
+            let r = 0, g = 0, b = 0, count = 0;
+            for (let dy = 0; dy < blockSize && (y + dy) < endYInt; dy++) {
+              for (let dx = 0; dx < blockSize && (x + dx) < endXInt; dx++) {
+                const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+                r += imageData.data[idx];
+                g += imageData.data[idx + 1];
+                b += imageData.data[idx + 2];
+                count++;
+              }
+            }
+            avgR = Math.floor(r / count);
+            avgG = Math.floor(g / count);
+            avgB = Math.floor(b / count);
+          }
+
+          // ブロック内を塗り潰し
           for (let dy = 0; dy < blockSize && (y + dy) < endYInt; dy++) {
             for (let dx = 0; dx < blockSize && (x + dx) < endXInt; dx++) {
               const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
@@ -237,20 +277,30 @@
 
       // 8. 必要なら赤枠を再描画
       drawSelection();
+
+      console.log("モザイク処理が完了しました。");
     });
 
     // -----------------------------
     // トリミング処理
     // -----------------------------
     applyTrimBtn.addEventListener('click', () => {
-      if (!isImageLoaded ||
-          startX === undefined || startY === undefined ||
-          endX   === undefined || endY   === undefined
+      console.log("トリミングボタンが押されました。");
+
+      if (!isImageLoaded) {
+        console.warn("トリミング: 画像未読み込みのためreturn");
+        return;
+      }
+      if (
+        startX === undefined || startY === undefined ||
+        endX   === undefined || endY   === undefined
       ) {
+        console.warn("トリミング: 選択範囲が未確定のためreturn");
         return;
       }
 
       // 1. Undo保存
+      console.log("トリミング: Undo用に現在のeditedImageDataをpushします。");
       historyStack.push(editedImageData);
 
       // 2. 赤枠を消す
@@ -262,13 +312,14 @@
       const trimWidth  = Math.abs(endX - startX);
       const trimHeight = Math.abs(endY - startY);
 
-      // キャンバス外に出ないよう調整
       const safeTrimX = Math.max(0, Math.min(canvas.width,  trimX));
       const safeTrimY = Math.max(0, Math.min(canvas.height, trimY));
       let safeWidth  = (safeTrimX + trimWidth  > canvas.width)
                        ? canvas.width  - safeTrimX : trimWidth;
       let safeHeight = (safeTrimY + trimHeight > canvas.height)
                        ? canvas.height - safeTrimY : trimHeight;
+
+      console.log("トリミング範囲:", { safeTrimX, safeTrimY, safeWidth, safeHeight });
 
       // 4. トリミング領域のイメージを取得
       const trimmedData = ctx.getImageData(safeTrimX, safeTrimY, safeWidth, safeHeight);
@@ -283,13 +334,20 @@
 
       // 7. 選択範囲リセット
       startX = startY = endX = endY = undefined;
+
+      console.log("トリミング処理が完了しました。");
     });
 
     // -----------------------------
     // ダウンロード処理
     // -----------------------------
     downloadImageBtn.addEventListener('click', () => {
-      if (!isImageLoaded) return;
+      console.log("ダウンロードボタンが押されました。");
+
+      if (!isImageLoaded) {
+        console.warn("ダウンロード: 画像未読み込みのためreturn");
+        return;
+      }
 
       // 赤枠を消しておく
       ctx.putImageData(editedImageData, 0, 0);
@@ -299,16 +357,23 @@
       link.download = 'edited-image.png';
       link.href = canvas.toDataURL();
       link.click();
+
+      console.log("ダウンロード完了。");
     });
 
     // -----------------------------
     // Undo処理
     // -----------------------------
     undoButton.addEventListener('click', () => {
-      if (historyStack.length === 0) return; // 履歴がなければ何もしない
+      console.log("Undoボタンが押されました。");
+      if (historyStack.length === 0) {
+        console.warn("Undo: 履歴が空です。return");
+        return;
+      }
 
       // 履歴から一つ前のデータを取り出す
       editedImageData = historyStack.pop();
+
       // キャンバスサイズも復元
       canvas.width = editedImageData.width;
       canvas.height = editedImageData.height;
@@ -317,13 +382,19 @@
 
       // 選択範囲リセット
       startX = startY = endX = endY = undefined;
+
+      console.log("Undo完了。");
     });
 
     // -----------------------------
     // リセット処理
     // -----------------------------
     resetButton.addEventListener('click', () => {
-      if (!originalImageData) return;
+      console.log("リセットボタンが押されました。");
+      if (!originalImageData) {
+        console.warn("リセット: originalImageDataがありません。return");
+        return;
+      }
 
       // オリジナルを復元
       editedImageData = originalImageData;
@@ -338,6 +409,8 @@
 
       // 範囲リセット
       startX = startY = endX = endY = undefined;
+
+      console.log("リセット完了。最初の状態に戻しました。");
     });
   </script>
 </body>
