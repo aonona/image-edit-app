@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画像編集アプリ</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+        #controls {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>画像編集アプリ</h1>
+    <input type="file" id="upload" accept="image/*">
+    <br>
+    <canvas id="canvas"></canvas>
+    <div id="controls">
+        <button id="applyMosaic">モザイク処理</button>
+        <button id="applyTrim">トリミング</button>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
