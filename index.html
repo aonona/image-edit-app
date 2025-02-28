@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v1.4</title>
+    <title>画像編集アプリ v1.5</title>
     <style>
         canvas {
             border: 1px solid black;
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ v1.4</h1>
+    <h1>画像編集アプリ v1.5</h1>
     <input type="file" id="upload" accept="image/*">
     <br>
     <canvas id="canvas"></canvas>
@@ -56,9 +56,13 @@
             }
         });
         
+        function clearCanvas() {
+            ctx.putImageData(editedImageData, 0, 0);
+        }
+        
         canvas.addEventListener('mousedown', (event) => {
             if (!isImageLoaded) return;
-            ctx.putImageData(editedImageData, 0, 0); // 既存の編集状態を保持
+            clearCanvas();
             isSelecting = true;
             startX = event.offsetX;
             startY = event.offsetY;
@@ -68,7 +72,6 @@
             if (isSelecting) {
                 endX = event.offsetX;
                 endY = event.offsetY;
-                drawSelection();
             }
         });
         
@@ -77,19 +80,11 @@
             isSelecting = false;
             endX = event.offsetX;
             endY = event.offsetY;
-            drawSelection();
         });
-        
-        function drawSelection() {
-            if (!isImageLoaded) return;
-            ctx.putImageData(editedImageData, 0, 0);
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-        }
         
         applyMosaicBtn.addEventListener('click', () => {
             if (!isImageLoaded) return;
+            clearCanvas();
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const blockSize = 10;
             
@@ -127,6 +122,7 @@
         
         applyTrimBtn.addEventListener('click', () => {
             if (!isImageLoaded) return;
+            clearCanvas();
             const trimWidth = endX - startX;
             const trimHeight = endY - startY;
             const trimmedImage = ctx.getImageData(startX, startY, trimWidth, trimHeight);
@@ -137,6 +133,7 @@
         });
         
         downloadImageBtn.addEventListener('click', () => {
+            clearCanvas();
             const link = document.createElement('a');
             link.download = 'edited-image.png';
             link.href = canvas.toDataURL();
