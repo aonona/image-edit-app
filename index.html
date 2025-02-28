@@ -98,10 +98,14 @@
         canvas.addEventListener('pointerdown', (event) => {
             if (!isImageLoaded) return;
             
-            // キャンバス上の座標を計算
+            // キャンバス表示領域と実際の描画解像度の比率を計算する
             const rect = canvas.getBoundingClientRect();
-            startX = event.clientX - rect.left;
-            startY = event.clientY - rect.top;
+            const scaleX = canvas.width  / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            // スケーリングを考慮して座標を算出
+            startX = (event.clientX - rect.left) * scaleX;
+            startY = (event.clientY - rect.top)  * scaleY;
             
             isSelecting = true;
         });
@@ -110,8 +114,11 @@
             if (!isSelecting) return;
             
             const rect = canvas.getBoundingClientRect();
-            endX = event.clientX - rect.left;
-            endY = event.clientY - rect.top;
+            const scaleX = canvas.width  / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            endX = (event.clientX - rect.left) * scaleX;
+            endY = (event.clientY - rect.top)  * scaleY;
             
             drawSelection(); 
         });
@@ -120,8 +127,11 @@
             if (!isSelecting) return;
             
             const rect = canvas.getBoundingClientRect();
-            endX = event.clientX - rect.left;
-            endY = event.clientY - rect.top;
+            const scaleX = canvas.width  / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            endX = (event.clientX - rect.left) * scaleX;
+            endY = (event.clientY - rect.top)  * scaleY;
             
             isSelecting = false;
             drawSelection();
@@ -142,7 +152,12 @@
             ctx.putImageData(editedImageData, 0, 0);
 
             // まだ選択範囲が確定していない場合は何も描かない
-            if (startX === undefined || startY === undefined || endX === undefined || endY === undefined) {
+            if (
+              startX === undefined || 
+              startY === undefined || 
+              endX   === undefined || 
+              endY   === undefined
+            ) {
                 return;
             }
             
@@ -170,8 +185,8 @@
             // 選択範囲を順にブロック単位で処理
             const startXInt = Math.min(startX, endX);
             const startYInt = Math.min(startY, endY);
-            const endXInt = Math.max(startX, endX);
-            const endYInt = Math.max(startY, endY);
+            const endXInt   = Math.max(startX, endX);
+            const endYInt   = Math.max(startY, endY);
 
             for (let y = startYInt; y < endYInt; y += blockSize) {
                 for (let x = startXInt; x < endXInt; x += blockSize) {
@@ -195,7 +210,7 @@
                     for (let dy = 0; dy < blockSize && (y + dy) < endYInt; dy++) {
                         for (let dx = 0; dx < blockSize && (x + dx) < endXInt; dx++) {
                             const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
-                            imageData.data[idx] = avgR;
+                            imageData.data[idx]     = avgR;
                             imageData.data[idx + 1] = avgG;
                             imageData.data[idx + 2] = avgB;
                         }
@@ -230,7 +245,7 @@
             // トリミング範囲を計算
             const trimX = Math.min(startX, endX);
             const trimY = Math.min(startY, endY);
-            const trimWidth = Math.abs(endX - startX);
+            const trimWidth  = Math.abs(endX - startX);
             const trimHeight = Math.abs(endY - startY);
 
             // トリミング領域のイメージデータを取得
@@ -262,9 +277,6 @@
             link.download = 'edited-image.png';
             link.href = canvas.toDataURL();
             link.click();
-
-            // 必要に応じて描画を戻すかどうかはご自由に
-            // drawSelection();
         });
 
         // ---------------------------
