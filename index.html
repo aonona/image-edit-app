@@ -7,6 +7,7 @@
     <style>
         canvas {
             border: 1px solid black;
+            cursor: crosshair;
         }
         #controls {
             margin-top: 10px;
@@ -22,6 +23,99 @@
         <button id="applyMosaic">モザイク処理</button>
         <button id="applyTrim">トリミング</button>
     </div>
-    <script src="script.js"></script>
+    <script>
+        const uploadInput = document.getElementById('upload');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const applyMosaicBtn = document.getElementById('applyMosaic');
+        const applyTrimBtn = document.getElementById('applyTrim');
+        
+        let img = new Image();
+        let isImageLoaded = false;
+        let startX, startY, endX, endY;
+        let isSelecting = false;
+        
+        uploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    img.onload = function() {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+                        isImageLoaded = true;
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        canvas.addEventListener('mousedown', (event) => {
+            if (!isImageLoaded) return;
+            isSelecting = true;
+            startX = event.offsetX;
+            startY = event.offsetY;
+        });
+        
+        canvas.addEventListener('mouseup', (event) => {
+            if (!isImageLoaded) return;
+            isSelecting = false;
+            endX = event.offsetX;
+            endY = event.offsetY;
+        });
+        
+        applyMosaicBtn.addEventListener('click', () => {
+            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixelData = imageData.data;
+            const blockSize = 10;
+            
+            for (let y = startY; y < endY; y += blockSize) {
+                for (let x = startX; x < endX; x += blockSize) {
+                    let r = 0, g = 0, b = 0, count = 0;
+                    
+                    for (let dy = 0; dy < blockSize && y + dy < endY; dy++) {
+                        for (let dx = 0; dx < blockSize && x + dx < endX; dx++) {
+                            const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+                            r += pixelData[idx];
+                            g += pixelData[idx + 1];
+                            b += pixelData[idx + 2];
+                            count++;
+                        }
+                    }
+                    
+                    r = Math.floor(r / count);
+                    g = Math.floor(g / count);
+                    b = Math.floor(b / count);
+                    
+                    for (let dy = 0; dy < blockSize && y + dy < endY; dy++) {
+                        for (let dx = 0; dx < blockSize && x + dx < endX; dx++) {
+                            const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+                            pixelData[idx] = r;
+                            pixelData[idx + 1] = g;
+                            pixelData[idx + 2] = b;
+                        }
+                    }
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+        });
+        
+        applyTrimBtn.addEventListener('click', () => {
+            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
+            
+            const trimWidth = endX - startX;
+            const trimHeight = endY - startY;
+            const trimmedImage = ctx.getImageData(startX, startY, trimWidth, trimHeight);
+            
+            canvas.width = trimWidth;
+            canvas.height = trimHeight;
+            ctx.putImageData(trimmedImage, 0, 0);
+        });
+    </script>
 </body>
 </html>
