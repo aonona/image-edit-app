@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v2.0</title>
+    <title>画像編集アプリ v2.1</title>
     <style>
         canvas {
             border: 1px solid black;
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ v2.0</h1>
+    <h1>画像編集アプリ v2.1</h1>
     <input type="file" id="upload" accept="image/*">
     <br>
     <canvas id="canvas"></canvas>
@@ -23,55 +23,74 @@
         <button id="applyMosaic">モザイク処理</button>
         <button id="applyTrim">トリミング</button>
         <button id="downloadImage">ダウンロード</button>
+        <!-- ここにUndoとリセット用のボタンを追加 -->
+        <button id="undoButton">一個前に戻る</button>
+        <button id="resetButton">リセット</button>
     </div>
     <script>
         const uploadInput = document.getElementById('upload');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        
         const applyMosaicBtn = document.getElementById('applyMosaic');
         const applyTrimBtn = document.getElementById('applyTrim');
         const downloadImageBtn = document.getElementById('downloadImage');
+        
+        // 追加したボタン
+        const undoButton = document.getElementById('undoButton');
+        const resetButton = document.getElementById('resetButton');
         
         let img = new Image();
         let isImageLoaded = false;
         let startX, startY, endX, endY;
         let isSelecting = false;
         
-        // 常に「赤枠抜き」の純粋な編集結果を保持する
+        // 常に「赤枠抜き」の純粋な編集結果を保持する（最新状態）
         let editedImageData = null;
+        // 最初のオリジナルデータ（アップロード直後の状態）
+        let originalImageData = null;
+        // Undo用の履歴スタック（配列の末尾を最新とする）
+        let historyStack = [];
         
         uploadInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    img.onload = function() {
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        ctx.drawImage(img, 0, 0);
-                        isImageLoaded = true;
-                        // 画像読込後、最初の状態を保存しておく
-                        editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    };
-                    img.src = e.target.result;
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    isImageLoaded = true;
+                    
+                    // 画像読込後の初期状態を記録
+                    editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    // それと同時にoriginalImageDataとしても保存（いつでもリセットできる）
+                    originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    
+                    // 履歴スタックはリセット
+                    historyStack = [];
                 };
-                reader.readAsDataURL(file);
-            }
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
         });
         
-        // 「画面上にだけ」赤枠を引く関数
+        // 画面上にだけ赤枠を表示する関数
         function drawSelection() {
             if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) {
                 return;
             }
-            // まず赤枠なしの編集画像データを再描画
+            // 赤枠なしの編集結果をまず表示
             ctx.putImageData(editedImageData, 0, 0);
-            // その上に赤枠だけ描画
+            // その上に赤枠
             ctx.strokeStyle = 'red';
             ctx.lineWidth = 2;
             ctx.strokeRect(startX, startY, endX - startX, endY - startY);
         }
         
+        // マウスによる選択処理
         canvas.addEventListener('mousedown', (event) => {
             if (!isImageLoaded) return;
             startX = event.offsetX;
@@ -92,15 +111,18 @@
             drawSelection();
         });
         
-        // --- モザイクボタン ---
+        // --- モザイク処理 ---
         applyMosaicBtn.addEventListener('click', () => {
             if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) {
                 return;
             }
-            // 1. 赤枠を消して、直前の編集画像を再描画
+            // 1. 現在のeditedImageDataを履歴に追加（Undo用）
+            historyStack.push(editedImageData);
+            
+            // 2. 赤枠を消して元の状態に戻す
             ctx.putImageData(editedImageData, 0, 0);
-
-            // 2. キャンバスを取得して、選択範囲にモザイクをかける
+            
+            // 3. モザイク処理
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const blockSize = 10;
             
@@ -133,53 +155,91 @@
                 }
             }
             
-            // 3. モザイクを反映して、赤枠なしの状態を再度保存する
+            // 4. モザイクを反映した新しい状態
             ctx.putImageData(imageData, 0, 0);
             editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-            // 4. 画面上に選択範囲をまた表示したいなら、再度drawSelection()を呼ぶ
+            
+            // 5. 画面に赤枠を戻す（必要があれば）
             drawSelection();
         });
         
-        // --- トリミングボタン ---
+        // --- トリミング処理 ---
         applyTrimBtn.addEventListener('click', () => {
             if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) {
                 return;
             }
-            // 1. 赤枠を消して、直前の編集画像を再描画
+            // 1. 現在のeditedImageDataを履歴に追加
+            historyStack.push(editedImageData);
+            
+            // 2. 赤枠を消して元の状態に戻す
             ctx.putImageData(editedImageData, 0, 0);
             
-            // 2. トリミング範囲を計算（選択範囲に合わせる）
+            // 3. トリミング範囲算出
             const trimX = Math.min(startX, endX);
             const trimY = Math.min(startY, endY);
             const trimWidth = Math.abs(endX - startX);
             const trimHeight = Math.abs(endY - startY);
             
-            // 3. トリミングして、キャンバスをその大きさにする
+            // 4. トリミングした部分を新たなキャンバスサイズに描画
             const trimmedData = ctx.getImageData(trimX, trimY, trimWidth, trimHeight);
             canvas.width = trimWidth;
             canvas.height = trimHeight;
             ctx.putImageData(trimmedData, 0, 0);
             
-            // 4. トリミング後の状態を保存
+            // 5. 新しい編集結果を保存
             editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-            // 5. 選択範囲をリセット
+            
+            // 6. 選択範囲リセット
             startX = startY = endX = endY = undefined;
         });
         
-        // --- ダウンロードボタン ---
+        // --- ダウンロード処理 ---
         downloadImageBtn.addEventListener('click', () => {
-            // ダウンロード前に、保存している赤枠なしのeditedImageDataを再描画
+            // 1. 赤枠を消しておく
             ctx.putImageData(editedImageData, 0, 0);
             
-            // ダウンロード用リンク作成
+            // 2. ダウンロード用リンク作成
             const link = document.createElement('a');
             link.download = 'edited-image.png';
             link.href = canvas.toDataURL();
             link.click();
             
-            // 画面上に赤枠を戻したいなら、ここでdrawSelection()を呼んでもOK
+            // 戻したければ再度drawSelection()呼ぶが、必須ではない
+        });
+        
+        // --- 追加: Undo処理 ---
+        undoButton.addEventListener('click', () => {
+            // もし履歴が空なら何もできない
+            if (historyStack.length === 0) {
+                return;
+            }
+            // 履歴から一つ前の状態を取り出して書き戻す
+            editedImageData = historyStack.pop();
+            canvas.width = editedImageData.width;
+            canvas.height = editedImageData.height;
+            ctx.putImageData(editedImageData, 0, 0);
+            
+            // 選択範囲は必要があればリセット
+            startX = startY = endX = endY = undefined;
+        });
+        
+        // --- 追加: リセット処理（最初の状態に戻す） ---
+        resetButton.addEventListener('click', () => {
+            if (!originalImageData) return; // 画像未読み込みなら何もしない
+            
+            // オリジナルデータを現在の編集データとして復元
+            editedImageData = originalImageData;
+            
+            // キャンバスサイズをオリジナルに戻す
+            canvas.width = originalImageData.width;
+            canvas.height = originalImageData.height;
+            ctx.putImageData(originalImageData, 0, 0);
+            
+            // 履歴はクリア
+            historyStack = [];
+            
+            // 選択範囲リセット
+            startX = startY = endX = endY = undefined;
         });
     </script>
 </body>
