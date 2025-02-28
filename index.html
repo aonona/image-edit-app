@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ</title>
+    <title>画像編集アプリ v1.1</title>
     <style>
         canvas {
             border: 1px solid black;
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ</h1>
+    <h1>画像編集アプリ v1.1</h1>
     <input type="file" id="upload" accept="image/*">
     <br>
     <canvas id="canvas"></canvas>
@@ -57,6 +57,13 @@
             isSelecting = true;
             startX = event.offsetX;
             startY = event.offsetY;
+        });
+        
+        canvas.addEventListener('mousemove', (event) => {
+            if (isSelecting) {
+                endX = event.offsetX;
+                endY = event.offsetY;
+            }
         });
         
         canvas.addEventListener('mouseup', (event) => {
