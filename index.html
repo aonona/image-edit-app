@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ダウンスケールモザイク+トリミング+Undo+リセット+DL (赤枠対策)</title>
+  <title>ダウンスケールモザイク - 枠なしでダウンロード</title>
   <style>
     canvas {
       border: 1px solid black;
@@ -16,7 +16,7 @@
   </style>
 </head>
 <body>
-<h1>ダウンスケール方式モザイク+トリミング+Undo+リセット+DL (赤枠が多重化しない版)</h1>
+<h1>ダウンスケールモザイク + トリミング + Undo + リセット + ダウンロード (枠なし保存)</h1>
 
 <input type="file" id="upload" accept="image/*"><br><br>
 <canvas id="canvas"></canvas>
@@ -51,12 +51,10 @@ let startX, startY, endX, endY;
 let isSelecting = false;
 
 // ダウンスケールモザイクの“粗さ”
-// 大きいほど荒い (10→幅高さ1/10に縮小→10倍拡大)
 let mosaicFactor = 10;
 
 /*
-  Undo用の履歴スタック:
-   - canvasの幅・高さ・ImageData全部を保存
+  Undo用に: 幅・高さ・ImageData を保存
 */
 let historyStack = [];
 
@@ -65,8 +63,7 @@ let originalWidth  = 0;
 let originalHeight = 0;
 let originalImageData = null;
 
-// “現在のキャンバス状態”を常に保持して
-// 枠を描くときにその状態へ戻せるようにする
+// 「現在のキャンバスの状態(枠なし)」
 let editedImageData = null;
 
 /* --------------------------------------------------
@@ -85,15 +82,15 @@ uploadInput.addEventListener('change', e => {
 
       isImageLoaded = true;
 
-      // リセット用に初期状態を保存
+      // リセット用に保存
       originalWidth  = img.width;
       originalHeight = img.height;
       originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // “現在の編集後状態”を更新
+      // 現在状態(枠なし)を保存
       editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // 履歴スタックをクリア
+      // 履歴クリア
       historyStack = [];
     };
     img.src = ev.target.result;
@@ -108,8 +105,8 @@ canvas.addEventListener('pointerdown', e => {
   if (!isImageLoaded) return;
 
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height/ rect.height;
+  const scaleX = canvas.width/rect.width;
+  const scaleY = canvas.height/rect.height;
 
   startX = (e.clientX - rect.left)*scaleX;
   startY = (e.clientY - rect.top )*scaleY;
@@ -120,8 +117,8 @@ canvas.addEventListener('pointermove', e => {
   if (!isSelecting) return;
 
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height/ rect.height;
+  const scaleX = canvas.width/rect.width;
+  const scaleY = canvas.height/rect.height;
 
   endX = (e.clientX - rect.left)*scaleX;
   endY = (e.clientY - rect.top )*scaleY;
@@ -132,8 +129,8 @@ canvas.addEventListener('pointerup', e => {
   if (!isSelecting) return;
 
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height/ rect.height;
+  const scaleX = canvas.width/rect.width;
+  const scaleY = canvas.height/rect.height;
 
   endX = (e.clientX - rect.left)*scaleX;
   endY = (e.clientY - rect.top )*scaleY;
@@ -145,20 +142,21 @@ canvas.addEventListener('pointercancel', () => {
   isSelecting = false;
 });
 
-/* 
-  毎回 “editedImageData” を putImageData して
-  いったん赤枠なしの状態に戻してから strokeRect 
+/*
+  毎回 “editedImageData” でキャンバスをリセット → 赤枠だけ strokeRect
+  → ダウンロード時は「editedImageData」のみ保存されるので、
+     枠は含まれない
 */
 function drawSelection(){
   if (!isImageLoaded) return;
   if (!editedImageData) return;
 
-  // 1) 現在のキャンバス状態を “editedImageData” から復元
+  // 枠なしの状態を復元
   ctx.putImageData(editedImageData, 0, 0);
 
   if (startX===undefined || endX===undefined) return;
 
-  // 2) 赤枠だけ strokeRect
+  // 赤枠だけ strokeRect
   ctx.strokeStyle = 'red';
   ctx.lineWidth = 2;
   ctx.strokeRect(
@@ -175,7 +173,7 @@ function pushHistory(){
   const snap = {
     width: canvas.width,
     height: canvas.height,
-    data: ctx.getImageData(0,0, canvas.width, canvas.height)
+    data: ctx.getImageData(0, 0, canvas.width, canvas.height)
   };
   historyStack.push(snap);
 }
@@ -190,27 +188,32 @@ applyMosaicBtn.addEventListener('click', () => {
   // Undo保存
   pushHistory();
 
-  // 選択範囲
+  // “枠なし”状態を復元
+  ctx.putImageData(editedImageData, 0, 0);
+
   const x1 = Math.min(startX, endX);
   const y1 = Math.min(startY, endY);
   const w  = Math.abs(endX - startX);
   const h  = Math.abs(endY - startY);
   if (w<1 || h<1) return;
 
-  // 1) 小さく描画する仮想Canvas
+  // 1) 縮小用仮想Canvas
   const tmpCanvas = document.createElement('canvas');
-  tmpCanvas.width  = Math.max(1, Math.floor(w / mosaicFactor));
-  tmpCanvas.height = Math.max(1, Math.floor(h / mosaicFactor));
+  tmpCanvas.width  = Math.max(1, Math.floor(w/mosaicFactor));
+  tmpCanvas.height = Math.max(1, Math.floor(h/mosaicFactor));
   const tctx = tmpCanvas.getContext('2d');
 
-  // 2) 選択範囲を縮小描画
-  tctx.drawImage(canvas, x1, y1, w, h, 0, 0, tmpCanvas.width, tmpCanvas.height);
+  // 2) 縮小描画
+  tctx.drawImage(canvas, x1, y1, w,h, 0,0, tmpCanvas.width, tmpCanvas.height);
 
-  // 3) それを元のサイズに拡大描画
-  ctx.drawImage(tmpCanvas, 0,0, tmpCanvas.width, tmpCanvas.height, x1, y1, w, h);
+  // 3) 再拡大描画
+  ctx.drawImage(tmpCanvas, 0,0, tmpCanvas.width,tmpCanvas.height, x1, y1, w,h);
 
-  // 4) “編集後の状態”を取り直す
+  // 4) モザイク後の状態を “枠なし”データとして再取得
   editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  // 5) 必要なら赤枠をまた描画
+  drawSelection();
 });
 
 /* --------------------------------------------------
@@ -223,35 +226,45 @@ applyTrimBtn.addEventListener('click', () => {
   // Undo保存
   pushHistory();
 
+  // “枠なし”状態を復元
+  ctx.putImageData(editedImageData, 0, 0);
+
   const x1 = Math.min(startX, endX);
   const y1 = Math.min(startY, endY);
   const w  = Math.abs(endX - startX);
   const h  = Math.abs(endY - startY);
   if (w<1 || h<1) return;
 
-  // 選択範囲を抜き出してCanvasリサイズ
-  const trimmed = ctx.getImageData(x1, y1, w, h);
+  // 選択範囲を抜き出し
+  const trimmed = ctx.getImageData(x1, y1, w,h);
   canvas.width = w;
   canvas.height= h;
-  ctx.putImageData(trimmed, 0, 0);
+  ctx.putImageData(trimmed, 0,0);
 
-  // 新たに“編集後の状態”を保存
-  editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  // “枠なし”データも更新
+  editedImageData = ctx.getImageData(0,0, w,h);
 
   // 選択リセット
-  startX = startY = endX = endY = undefined;
+  startX=startY=endX=endY=undefined;
 });
 
 /* --------------------------------------------------
-   7) ダウンロード
+   7) ダウンロード (枠なし)
 -------------------------------------------------- */
 downloadBtn.addEventListener('click', () => {
   if (!isImageLoaded) return;
-  // 赤枠などは“実際のCanvasには描いてない”からそのままDLOK
+
+  // 1) ダウンロード前に、枠なしのeditedImageDataを再描画
+  ctx.putImageData(editedImageData, 0, 0);
+
+  // 2) ダウンロード
   const link = document.createElement('a');
   link.download = 'edited-image.png';
   link.href = canvas.toDataURL();
   link.click();
+
+  // 3) ダウンロード後、必要なら drawSelection() で枠を戻す
+  drawSelection();
 });
 
 /* --------------------------------------------------
@@ -264,11 +277,11 @@ undoBtn.addEventListener('click', () => {
   canvas.height= snap.height;
   ctx.putImageData(snap.data, 0, 0);
 
-  // “編集後の状態”も戻す
-  editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  // 枠なしデータを更新
+  editedImageData = ctx.getImageData(0,0, canvas.width, canvas.height);
 
   // 選択リセット
-  startX = startY = endX = endY = undefined;
+  startX=startY=endX=endY=undefined;
 });
 
 /* --------------------------------------------------
@@ -278,16 +291,16 @@ resetBtn.addEventListener('click', () => {
   if (!originalImageData) return;
   canvas.width = originalWidth;
   canvas.height= originalHeight;
-  ctx.putImageData(originalImageData, 0, 0);
+  ctx.putImageData(originalImageData, 0,0);
 
-  // “編集後の状態”を戻す
+  // 枠なしデータを更新
   editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   // 履歴クリア
-  historyStack = [];
+  historyStack=[];
 
   // 選択リセット
-  startX = startY = endX = endY = undefined;
+  startX=startY=endX=endY=undefined;
 });
 </script>
 </body>
