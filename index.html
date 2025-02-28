@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>画像編集アプリ (Pointer Events版)</title>
+  <style>
+    canvas {
+      border: 1px solid black;
+      touch-action: none; /* スマホでもドラッグ操作を可能に */
+      cursor: crosshair;
+    }
+    #controls {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>画像編集アプリ (Pointer Events対応)</h1>
+  <p>PCマウス、スマホタッチの両方で範囲選択ができます。</p>
+
+  <!-- 画像アップロード -->
+  <input type="file" id="upload" accept="image/*"><br><br>
+
+  <!-- キャンバス -->
+  <canvas id="canvas"></canvas>
+
+  <!-- 各種ボタン -->
+  <div id="controls">
+    <button id="applyMosaic">モザイク処理</button>
+    <button id="applyTrim">トリミング</button>
+    <button id="downloadImage">ダウンロード</button>
+    <button id="undoButton">一個前に戻る</button>
+    <button id="resetButton">リセット</button>
+  </div>
+
+  <script>
+    // -----------------------------
+    // 要素の取得
+    // -----------------------------
+    const uploadInput = document.getElementById('upload');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const applyMosaicBtn = document.getElementById('applyMosaic');
+    const applyTrimBtn = document.getElementById('applyTrim');
+    const downloadImageBtn = document.getElementById('downloadImage');
+    const undoButton = document.getElementById('undoButton');
+    const resetButton = document.getElementById('resetButton');
+
+    // 画像や編集状態を管理する変数
+    let img = new Image();
+    let isImageLoaded = false;
+
+    // 範囲選択用
+    let startX, startY, endX, endY;
+    let isSelecting = false;
+
+    // 「最新の編集後の状態」（赤枠は含まない）
+    let editedImageData = null;
+    // 「オリジナル状態」（リセット用）
+    let originalImageData = null;
+    // Undo用の履歴スタック
+    let historyStack = [];
+
+    // -----------------------------
+    // 画像アップロード処理
+    // -----------------------------
+    uploadInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        img.onload = function() {
+          // キャンバスサイズを画像サイズに合わせる
+          canvas.width = img.width;
+          canvas.height = img.height;
+          // 画像を描画
+          ctx.drawImage(img, 0, 0);
+
+          isImageLoaded = true;
+
+          // 読み込んだ直後の状態を両方に保存
+          editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+          // 履歴スタックを初期化
+          historyStack = [];
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // -----------------------------
+    // Pointer Events (PC/スマホ対応)
+    // -----------------------------
+    canvas.addEventListener('pointerdown', (event) => {
+      if (!isImageLoaded) return;
+
+      // キャンバスの見かけサイズと内部解像度の差分を埋めるスケール
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width  / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      // 実際のキャンバス座標を計算
+      startX = (event.clientX - rect.left) * scaleX;
+      startY = (event.clientY - rect.top)  * scaleY;
+
+      isSelecting = true;
+    });
+
+    canvas.addEventListener('pointermove', (event) => {
+      if (!isSelecting) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width  / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      endX = (event.clientX - rect.left) * scaleX;
+      endY = (event.clientY - rect.top)  * scaleY;
+
+      drawSelection();
+    });
+
+    canvas.addEventListener('pointerup', (event) => {
+      if (!isSelecting) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width  / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      endX = (event.clientX - rect.left) * scaleX;
+      endY = (event.clientY - rect.top)  * scaleY;
+
+      isSelecting = false;
+      drawSelection();
+    });
+
+    // スマホで操作中に外へはみ出すとキャンセルされる場合など
+    canvas.addEventListener('pointercancel', () => {
+      isSelecting = false;
+    });
+
+    // -----------------------------
+    // 画面上に赤枠を描画
+    // -----------------------------
+    function drawSelection() {
+      if (!isImageLoaded) return;
+
+      // まず編集後の画像(赤枠なし)を再描画
+      ctx.putImageData(editedImageData, 0, 0);
+
+      if (
+        startX === undefined ||
+        startY === undefined ||
+        endX   === undefined ||
+        endY   === undefined
+      ) {
+        return;
+      }
+
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+    }
+
+    // -----------------------------
+    // モザイク処理
+    // -----------------------------
+    applyMosaicBtn.addEventListener('click', () => {
+      if (!isImageLoaded ||
+          startX === undefined || startY === undefined ||
+          endX   === undefined || endY   === undefined
+      ) {
+        return; // まだ画像や範囲が確定していない
+      }
+
+      // 1. Undo用に現在の編集状態を保存
+      historyStack.push(editedImageData);
+
+      // 2. 赤枠を消す
+      ctx.putImageData(editedImageData, 0, 0);
+
+      // 3. 画像データを取得
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const blockSize = 10; // モザイクの粒度
+
+      // 4. 選択範囲を確定（0～canvas.width/height内にクランプ）
+      let startXInt = Math.min(startX, endX);
+      let endXInt   = Math.max(startX, endX);
+      let startYInt = Math.min(startY, endY);
+      let endYInt   = Math.max(startY, endY);
+
+      startXInt = Math.max(0, Math.min(canvas.width,  startXInt));
+      endXInt   = Math.max(0, Math.min(canvas.width,  endXInt));
+      startYInt = Math.max(0, Math.min(canvas.height, startYInt));
+      endYInt   = Math.max(0, Math.min(canvas.height, endYInt));
+
+      // 5. モザイク適用
+      for (let y = startYInt; y < endYInt; y += blockSize) {
+        for (let x = startXInt; x < endXInt; x += blockSize) {
+          let r = 0, g = 0, b = 0, count = 0;
+          
+          // ブロック内の平均色を計算
+          for (let dy = 0; dy < blockSize && (y + dy) < endYInt; dy++) {
+            for (let dx = 0; dx < blockSize && (x + dx) < endXInt; dx++) {
+              const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+              r += imageData.data[idx];
+              g += imageData.data[idx + 1];
+              b += imageData.data[idx + 2];
+              count++;
+            }
+          }
+          const avgR = Math.floor(r / count);
+          const avgG = Math.floor(g / count);
+          const avgB = Math.floor(b / count);
+
+          // ブロック内を平均色で塗りつぶす
+          for (let dy = 0; dy < blockSize && (y + dy) < endYInt; dy++) {
+            for (let dx = 0; dx < blockSize && (x + dx) < endXInt; dx++) {
+              const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+              imageData.data[idx]     = avgR;
+              imageData.data[idx + 1] = avgG;
+              imageData.data[idx + 2] = avgB;
+            }
+          }
+        }
+      }
+
+      // 6. 反映
+      ctx.putImageData(imageData, 0, 0);
+
+      // 7. editedImageDataを更新
+      editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      // 8. 必要なら赤枠を再描画
+      drawSelection();
+    });
+
+    // -----------------------------
+    // トリミング処理
+    // -----------------------------
+    applyTrimBtn.addEventListener('click', () => {
+      if (!isImageLoaded ||
+          startX === undefined || startY === undefined ||
+          endX   === undefined || endY   === undefined
+      ) {
+        return;
+      }
+
+      // 1. Undo保存
+      historyStack.push(editedImageData);
+
+      // 2. 赤枠を消す
+      ctx.putImageData(editedImageData, 0, 0);
+
+      // 3. トリミング範囲をクランプ
+      const trimX = Math.min(startX, endX);
+      const trimY = Math.min(startY, endY);
+      const trimWidth  = Math.abs(endX - startX);
+      const trimHeight = Math.abs(endY - startY);
+
+      // キャンバス外に出ないよう調整
+      const safeTrimX = Math.max(0, Math.min(canvas.width,  trimX));
+      const safeTrimY = Math.max(0, Math.min(canvas.height, trimY));
+      let safeWidth  = (safeTrimX + trimWidth  > canvas.width)
+                       ? canvas.width  - safeTrimX : trimWidth;
+      let safeHeight = (safeTrimY + trimHeight > canvas.height)
+                       ? canvas.height - safeTrimY : trimHeight;
+
+      // 4. トリミング領域のイメージを取得
+      const trimmedData = ctx.getImageData(safeTrimX, safeTrimY, safeWidth, safeHeight);
+
+      // 5. キャンバスをそのサイズに変更 & 描画
+      canvas.width = safeWidth;
+      canvas.height = safeHeight;
+      ctx.putImageData(trimmedData, 0, 0);
+
+      // 6. editedImageDataを更新
+      editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      // 7. 選択範囲リセット
+      startX = startY = endX = endY = undefined;
+    });
+
+    // -----------------------------
+    // ダウンロード処理
+    // -----------------------------
+    downloadImageBtn.addEventListener('click', () => {
+      if (!isImageLoaded) return;
+
+      // 赤枠を消しておく
+      ctx.putImageData(editedImageData, 0, 0);
+
+      // ダウンロードリンクを作成
+      const link = document.createElement('a');
+      link.download = 'edited-image.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    });
+
+    // -----------------------------
+    // Undo処理
+    // -----------------------------
+    undoButton.addEventListener('click', () => {
+      if (historyStack.length === 0) return; // 履歴がなければ何もしない
+
+      // 履歴から一つ前のデータを取り出す
+      editedImageData = historyStack.pop();
+      // キャンバスサイズも復元
+      canvas.width = editedImageData.width;
+      canvas.height = editedImageData.height;
+      // 描画
+      ctx.putImageData(editedImageData, 0, 0);
+
+      // 選択範囲リセット
+      startX = startY = endX = endY = undefined;
+    });
+
+    // -----------------------------
+    // リセット処理
+    // -----------------------------
+    resetButton.addEventListener('click', () => {
+      if (!originalImageData) return;
+
+      // オリジナルを復元
+      editedImageData = originalImageData;
+
+      // キャンバスサイズも戻す
+      canvas.width = originalImageData.width;
+      canvas.height = originalImageData.height;
+      ctx.putImageData(originalImageData, 0, 0);
+
+      // 履歴クリア
+      historyStack = [];
+
+      // 範囲リセット
+      startX = startY = endX = endY = undefined;
+    });
+  </script>
+</body>
+</html>
