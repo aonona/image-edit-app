@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v1.9</title>
+    <title>画像編集アプリ v1.8</title>
     <style>
         canvas {
             border: 1px solid black;
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ v1.9</h1>
+    <h1>画像編集アプリ v1.8</h1>
     <input type="file" id="upload" accept="image/*">
     <br>
     <canvas id="canvas"></canvas>
@@ -36,6 +36,8 @@
         let isImageLoaded = false;
         let startX, startY, endX, endY;
         let isSelecting = false;
+        
+        // 常に「赤枠抜き」の純粋な編集結果を保持する
         let editedImageData = null;
         
         uploadInput.addEventListener('change', (event) => {
@@ -48,7 +50,7 @@
                         canvas.height = img.height;
                         ctx.drawImage(img, 0, 0);
                         isImageLoaded = true;
-                        // 最初の画像状態を保存
+                        // 画像読込後、最初の状態を保存しておく
                         editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     };
                     img.src = e.target.result;
@@ -57,12 +59,14 @@
             }
         });
         
+        // 「画面上にだけ」赤枠を引く関数
         function drawSelection() {
             if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) {
                 return;
             }
-            // まず編集後の画像を描き戻してから赤枠
+            // まず赤枠なしの編集画像データを再描画
             ctx.putImageData(editedImageData, 0, 0);
+            // その上に赤枠だけ描画
             ctx.strokeStyle = 'red';
             ctx.lineWidth = 2;
             ctx.strokeRect(startX, startY, endX - startX, endY - startY);
@@ -88,11 +92,15 @@
             drawSelection();
         });
         
+        // --- モザイクボタン ---
         applyMosaicBtn.addEventListener('click', () => {
             if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) {
                 return;
             }
-            
+            // 1. 赤枠を消して、直前の編集画像を再描画
+            ctx.putImageData(editedImageData, 0, 0);
+
+            // 2. キャンバスを取得して、選択範囲にモザイクをかける
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const blockSize = 10;
             
@@ -124,47 +132,54 @@
                     }
                 }
             }
+            
+            // 3. モザイクを反映して、赤枠なしの状態を再度保存する
             ctx.putImageData(imageData, 0, 0);
-            // 赤枠が反映される前の画像データを保存
             editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            // 4. 画面上に選択範囲をまた表示したいなら、再度drawSelection()を呼ぶ
+            drawSelection();
         });
         
+        // --- トリミングボタン ---
         applyTrimBtn.addEventListener('click', () => {
             if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) {
                 return;
             }
+            // 1. 赤枠を消して、直前の編集画像を再描画
+            ctx.putImageData(editedImageData, 0, 0);
             
-            // トリミング範囲を選択された部分に合わせて実装するなら、本来は以下のように計算する
+            // 2. トリミング範囲を計算（選択範囲に合わせる）
             const trimX = Math.min(startX, endX);
             const trimY = Math.min(startY, endY);
             const trimWidth = Math.abs(endX - startX);
             const trimHeight = Math.abs(endY - startY);
             
-            // 画像データを取得して別のcanvasに描画、再転写する手もあり
+            // 3. トリミングして、キャンバスをその大きさにする
             const trimmedData = ctx.getImageData(trimX, trimY, trimWidth, trimHeight);
-            
             canvas.width = trimWidth;
             canvas.height = trimHeight;
             ctx.putImageData(trimmedData, 0, 0);
             
-            // トリミング後の状態を新たにeditedImageDataとして保存
+            // 4. トリミング後の状態を保存
             editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            
-            // 選択範囲をリセット
+
+            // 5. 選択範囲をリセット
             startX = startY = endX = endY = undefined;
         });
         
+        // --- ダウンロードボタン ---
         downloadImageBtn.addEventListener('click', () => {
-            // ダウンロード直前に編集後の画像データを再度描画して赤枠を消す
+            // ダウンロード前に、保存している赤枠なしのeditedImageDataを再描画
             ctx.putImageData(editedImageData, 0, 0);
             
+            // ダウンロード用リンク作成
             const link = document.createElement('a');
             link.download = 'edited-image.png';
             link.href = canvas.toDataURL();
             link.click();
             
-            // 必要なら選択範囲や状態をここでリセット
-            // startX = startY = endX = endY = undefined;
+            // 画面上に赤枠を戻したいなら、ここでdrawSelection()を呼んでもOK
         });
     </script>
 </body>
