@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v1.6</title>
+    <title>画像編集アプリ v1.7</title>
     <style>
         canvas {
             border: 1px solid black;
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ v1.6</h1>
+    <h1>画像編集アプリ v1.7</h1>
     <input type="file" id="upload" accept="image/*">
     <br>
     <canvas id="canvas"></canvas>
@@ -81,6 +81,45 @@
         
         canvas.addEventListener('mouseup', (event) => {
             isSelecting = false;
+            drawSelection();
+        });
+        
+        applyMosaicBtn.addEventListener('click', () => {
+            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const blockSize = 10;
+            
+            for (let y = startY; y < endY; y += blockSize) {
+                for (let x = startX; x < endX; x += blockSize) {
+                    let r = 0, g = 0, b = 0, count = 0;
+                    
+                    for (let dy = 0; dy < blockSize && y + dy < endY; dy++) {
+                        for (let dx = 0; dx < blockSize && x + dx < endX; dx++) {
+                            const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+                            r += imageData.data[idx];
+                            g += imageData.data[idx + 1];
+                            b += imageData.data[idx + 2];
+                            count++;
+                        }
+                    }
+                    
+                    r = Math.floor(r / count);
+                    g = Math.floor(g / count);
+                    b = Math.floor(b / count);
+                    
+                    for (let dy = 0; dy < blockSize && y + dy < endY; dy++) {
+                        for (let dx = 0; dx < blockSize && x + dx < endX; dx++) {
+                            const idx = ((y + dy) * canvas.width + (x + dx)) * 4;
+                            imageData.data[idx] = r;
+                            imageData.data[idx + 1] = g;
+                            imageData.data[idx + 2] = b;
+                        }
+                    }
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+            editedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         });
         
         downloadImageBtn.addEventListener('click', () => {
