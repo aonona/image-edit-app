@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v1.1</title>
+    <title>画像編集アプリ v1.2</title>
     <style>
         canvas {
             border: 1px solid black;
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ v1.1</h1>
+    <h1>画像編集アプリ v1.2</h1>
     <input type="file" id="upload" accept="image/*">
     <br>
     <canvas id="canvas"></canvas>
@@ -63,6 +63,7 @@
             if (isSelecting) {
                 endX = event.offsetX;
                 endY = event.offsetY;
+                drawSelection();
             }
         });
         
@@ -71,7 +72,17 @@
             isSelecting = false;
             endX = event.offsetX;
             endY = event.offsetY;
+            drawSelection();
         });
+        
+        function drawSelection() {
+            if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
+            
+            ctx.drawImage(img, 0, 0);
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+        }
         
         applyMosaicBtn.addEventListener('click', () => {
             if (!isImageLoaded || startX === undefined || startY === undefined || endX === undefined || endY === undefined) return;
