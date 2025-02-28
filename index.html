@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像編集アプリ v2.2</title>
+    <title>画像編集アプリ - Debug Mosaic</title>
     <style>
         canvas {
             border: 1px solid black;
-            touch-action: none;
+            touch-action: none; /* スマホ・タブレットでのスクロールを防いでドラッグを可能にする */
             cursor: crosshair;
         }
         #controls {
@@ -16,16 +16,17 @@
     </style>
 </head>
 <body>
-    <h1>画像編集アプリ v2.2</h1>
-    
-    <!-- 画像をアップロード -->
+    <h1>画像編集アプリ (デバッグ版)</h1>
+    <p>※画像をアップロードし、ドラッグで範囲を選択後、モザイク処理・トリミング処理ができます。</p>
+
+    <!-- 画像アップロード -->
     <input type="file" id="upload" accept="image/*">
     <br><br>
 
     <!-- キャンバス -->
     <canvas id="canvas"></canvas>
     
-    <!-- ボタン類 -->
+    <!-- 操作用ボタン -->
     <div id="controls">
         <button id="applyMosaic">モザイク処理</button>
         <button id="applyTrim">トリミング</button>
@@ -34,7 +35,7 @@
         <button id="resetButton">リセット</button>
     </div>
 
-    <!-- スクリプト読み込み -->
+    <!-- スクリプトの読み込み -->
     <script src="script.js"></script>
 </body>
 </html>
