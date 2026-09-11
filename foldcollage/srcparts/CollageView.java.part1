@@ -1,0 +1,200 @@
+package com.aonon.foldcollage;
+
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
+import android.graphics.Region;
+import android.net.Uri;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
+import android.view.View;
+
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+
+public class CollageView extends View {
+    public enum Preset {
+        V2("縦2分割", 2),
+        H2("横2分割", 2),
+        V3("縦3分割", 3),
+        H3("横3分割", 3),
+        DIAG2_R("斜め2 ／", 2),
+        DIAG2_L("斜め2 ＼", 2),
+        DIAG3_R("斜め3 ／", 3);
+
+        public final String label;
+        public final int cells;
+        Preset(String label, int cells) { this.label = label; this.cells = cells; }
+    }
+
+    public interface Listener {
+        void onRequestImage(int cellIndex);
+        void onSelectionChanged(int cellIndex);
+        void onStateChanged();
+    }
+
+    private static class ImageState {
+        Uri uri;
+        Bitmap bitmap;
+        float zoom = 1f;
+        float offsetX = 0f; // in cell-width units
+        float offsetY = 0f; // in cell-height units
+    }
+
+    private static class DividerSegment {
+        final float x1;
+        final float y1;
+        final float x2;
+        final float y2;
+
+        DividerSegment(float x1, float y1, float x2, float y2) {
+            this.x1 = x1;
+            this.y1 = y1;
+            this.x2 = x2;
+            this.y2 = y2;
+        }
+    }
+
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final List<ImageState> images = new ArrayList<>();
+    private final Map<Preset, float[]> dividerPositions = new EnumMap<>(Preset.class);
+    private final ScaleGestureDetector scaleDetector;
+    private Listener listener;
+    private Preset preset = Preset.V2;
+    private int selected = 0;
+    private int draggingDivider = -1;
+    private float lastX;
+    private float lastY;
+    private boolean moved;
+
+    public CollageView(Context context) {
+        super(context);
+        setBackgroundColor(Color.rgb(11, 13, 17));
+        setFocusable(true);
+        for (int i = 0; i < 4; i++) images.add(new ImageState());
+        for (Preset p : Preset.values()) dividerPositions.put(p, defaultDividers(p));
+
+        stroke.setStyle(Paint.Style.STROKE);
+        stroke.setStrokeJoin(Paint.Join.ROUND);
+        stroke.setStrokeCap(Paint.Cap.ROUND);
+        text.setColor(Color.WHITE);
+        text.setTextAlign(Paint.Align.CENTER);
+
+        scaleDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScale(ScaleGestureDetector detector) {
+                ImageState st = images.get(selected);
+                if (st.bitmap == null) return false;
+                float next = st.zoom * detector.getScaleFactor();
+                st.zoom = Math.max(1f, Math.min(6f, next));
+                clampOffsets(selected);
+                invalidate();
+                changed();
+                return true;
+            }
+        });
+    }
+
+    public void setListener(Listener listener) { this.listener = listener; }
+
+    public Preset getPreset() { return preset; }
+
+    public void setPreset(Preset p) {
+        if (p == null) return;
+        preset = p;
+        if (selected >= p.cells) selected = p.cells - 1;
+        invalidate();
+        if (listener != null) listener.onSelectionChanged(selected);
+        changed();
+    }
+
+    public int getSelectedCell() { return selected; }
+
+    public void requestImageForSelected() {
+        if (listener != null) listener.onRequestImage(selected);
+    }
+
+    public void setImageForCell(int index, Uri uri, Bitmap bitmap) {
+        if (index < 0 || index >= images.size() || bitmap == null) return;
+        ImageState st = images.get(index);
+        if (st.bitmap != null && st.bitmap != bitmap && !st.bitmap.isRecycled()) {
+            st.bitmap.recycle();
+        }
+        st.uri = uri;
+        st.bitmap = bitmap;
+        st.zoom = 1f;
+        st.offsetX = 0f;
+        st.offsetY = 0f;
+        selected = index;
+        invalidate();
+        if (listener != null) listener.onSelectionChanged(selected);
+        changed();
+    }
+
+    public void resetSelectedTransform() {
+        ImageState st = images.get(selected);
+        st.zoom = 1f;
+        st.offsetX = 0f;
+        st.offsetY = 0f;
+        invalidate();
+        changed();
+    }
+
+    public void resetDividers() {
+        dividerPositions.put(preset, defaultDividers(preset));
+        draggingDivider = -1;
+        invalidate();
+        changed();
+    }
+
+    public void resetAllTransformsAndDividers() {
+        for (ImageState st : images) {
+            st.zoom = 1f;
+            st.offsetX = 0f;
+            st.offsetY = 0f;
+        }
+        dividerPositions.put(preset, defaultDividers(preset));
+        draggingDivider = -1;
+        invalidate();
+        changed();
+    }
+
+    public boolean isComplete() {
+        for (int i = 0; i < preset.cells; i++) {
+            if (images.get(i).bitmap == null) return false;
+        }
+        return true;
+    }
+
+    public Bitmap renderForExport(float aspectRatio, int maxEdgePx) {
+        int outW;
+        int outH;
+        if (aspectRatio >= 1f) {
+            outW = maxEdgePx;
+            outH = Math.max(1, Math.round(maxEdgePx / aspectRatio));
+        } else {
+            outH = maxEdgePx;
+            outW = Math.max(1, Math.round(maxEdgePx * aspectRatio));
+        }
+        Bitmap out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        drawCollage(canvas, outW, outH, false);
+        return out;
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        drawCollage(canvas, getWidth(), getHeight(), true);
+    }
+
+    private void drawCollage(Canvas canvas, int width, int height, boolean interactive) {
