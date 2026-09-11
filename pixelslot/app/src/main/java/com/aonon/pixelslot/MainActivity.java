@@ -12,6 +12,6 @@ public class MainActivity extends Activity {
         Window window = getWindow();
         window.setStatusBarColor(Color.rgb(33, 18, 52));
         window.setNavigationBarColor(Color.rgb(22, 12, 38));
-        setContentView(new PixelSlotV5View(this));
+        setContentView(new PixelSlotV6OverlayView(this));
     }
 }
