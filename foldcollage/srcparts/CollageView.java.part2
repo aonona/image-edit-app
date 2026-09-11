@@ -1,0 +1,200 @@
+        canvas.drawColor(Color.rgb(11, 13, 17));
+        List<Path> paths = buildPaths(width, height);
+        for (int i = 0; i < preset.cells; i++) {
+            Path path = paths.get(i);
+            RectF bounds = new RectF();
+            path.computeBounds(bounds, true);
+            ImageState st = images.get(i);
+
+            canvas.save();
+            canvas.clipPath(path);
+            if (st.bitmap != null) {
+                paint.setColor(Color.WHITE);
+                Matrix m = matrixFor(st, bounds);
+                canvas.drawBitmap(st.bitmap, m, paint);
+            } else {
+                paint.setColor(Color.rgb(31, 36, 46));
+                canvas.drawRect(bounds, paint);
+                if (interactive) drawPlaceholder(canvas, bounds, i);
+            }
+            canvas.restore();
+
+            stroke.setColor(Color.argb(235, 255, 255, 255));
+            stroke.setStrokeWidth(Math.max(2f, Math.min(width, height) * 0.004f));
+            canvas.drawPath(path, stroke);
+
+            if (interactive && i == selected) {
+                stroke.setColor(Color.rgb(110, 168, 254));
+                stroke.setStrokeWidth(Math.max(5f, Math.min(width, height) * 0.009f));
+                canvas.drawPath(path, stroke);
+            }
+        }
+
+        if (interactive && draggingDivider >= 0) {
+            List<DividerSegment> dividers = dividerSegments(width, height);
+            if (draggingDivider < dividers.size()) {
+                DividerSegment d = dividers.get(draggingDivider);
+                stroke.setColor(Color.rgb(255, 196, 92));
+                stroke.setStrokeWidth(Math.max(7f, Math.min(width, height) * 0.012f));
+                canvas.drawLine(d.x1, d.y1, d.x2, d.y2, stroke);
+            }
+        }
+    }
+
+    private void drawPlaceholder(Canvas canvas, RectF b, int index) {
+        if (b.width() < 8 || b.height() < 8) return;
+        float size = Math.max(22f, Math.min(b.width(), b.height()) * 0.075f);
+        text.setTextSize(size);
+        text.setColor(Color.rgb(225, 231, 240));
+        canvas.drawText("写真 " + (index + 1), b.centerX(), b.centerY() - size * 0.15f, text);
+        text.setTextSize(size * 0.55f);
+        text.setColor(Color.rgb(155, 166, 184));
+        canvas.drawText("タップして選択", b.centerX(), b.centerY() + size * 0.7f, text);
+    }
+
+    private Matrix matrixFor(ImageState st, RectF cell) {
+        Bitmap bm = st.bitmap;
+        float safeW = Math.max(1f, cell.width());
+        float safeH = Math.max(1f, cell.height());
+        float base = Math.max(safeW / bm.getWidth(), safeH / bm.getHeight());
+        float scale = base * st.zoom;
+        float drawW = bm.getWidth() * scale;
+        float drawH = bm.getHeight() * scale;
+        float dx = cell.centerX() - drawW / 2f + st.offsetX * safeW;
+        float dy = cell.centerY() - drawH / 2f + st.offsetY * safeH;
+        Matrix m = new Matrix();
+        m.setScale(scale, scale);
+        m.postTranslate(dx, dy);
+        return m;
+    }
+
+    private void clampOffsets(int index) {
+        ImageState st = images.get(index);
+        if (st.bitmap == null || getWidth() == 0 || getHeight() == 0) return;
+        List<Path> paths = buildPaths(getWidth(), getHeight());
+        if (index >= paths.size()) return;
+        RectF cell = new RectF();
+        paths.get(index).computeBounds(cell, true);
+        float safeW = Math.max(1f, cell.width());
+        float safeH = Math.max(1f, cell.height());
+        float base = Math.max(safeW / st.bitmap.getWidth(), safeH / st.bitmap.getHeight());
+        float scale = base * st.zoom;
+        float drawW = st.bitmap.getWidth() * scale;
+        float drawH = st.bitmap.getHeight() * scale;
+        float maxDx = Math.max(0f, (drawW - safeW) / 2f);
+        float maxDy = Math.max(0f, (drawH - safeH) / 2f);
+        float dx = st.offsetX * safeW;
+        float dy = st.offsetY * safeH;
+        dx = Math.max(-maxDx, Math.min(maxDx, dx));
+        dy = Math.max(-maxDy, Math.min(maxDy, dy));
+        st.offsetX = dx / safeW;
+        st.offsetY = dy / safeH;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        float x = event.getX();
+        float y = event.getY();
+
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            draggingDivider = hitDivider(x, y);
+            if (draggingDivider < 0) {
+                scaleDetector.onTouchEvent(event);
+                int hit = hitTest(x, y);
+                if (hit >= 0) {
+                    selected = hit;
+                    if (listener != null) listener.onSelectionChanged(selected);
+                    invalidate();
+                }
+            } else {
+                invalidate();
+            }
+            lastX = x;
+            lastY = y;
+            moved = false;
+            return true;
+        }
+
+        if (draggingDivider < 0) {
+            scaleDetector.onTouchEvent(event);
+        }
+
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_MOVE: {
+                if (draggingDivider >= 0) {
+                    if (event.getPointerCount() == 1) {
+                        float dx = x - lastX;
+                        float dy = y - lastY;
+                        if (Math.hypot(dx, dy) > 1.0) moved = true;
+                        moveDivider(draggingDivider, x, y);
+                    }
+                } else if (!scaleDetector.isInProgress()) {
+                    float dx = x - lastX;
+                    float dy = y - lastY;
+                    if (Math.hypot(dx, dy) > 2.0) moved = true;
+                    ImageState st = images.get(selected);
+                    if (st.bitmap != null) {
+                        List<Path> paths = buildPaths(getWidth(), getHeight());
+                        RectF cell = new RectF();
+                        paths.get(selected).computeBounds(cell, true);
+                        if (cell.width() > 0 && cell.height() > 0) {
+                            st.offsetX += dx / cell.width();
+                            st.offsetY += dy / cell.height();
+                            clampOffsets(selected);
+                            invalidate();
+                            changed();
+                        }
+                    }
+                }
+                lastX = x;
+                lastY = y;
+                return true;
+            }
+            case MotionEvent.ACTION_UP: {
+                if (draggingDivider >= 0) {
+                    draggingDivider = -1;
+                    invalidate();
+                    performClick();
+                    return true;
+                }
+                if (!moved && !scaleDetector.isInProgress()) {
+                    ImageState st = images.get(selected);
+                    if (st.bitmap == null && listener != null) listener.onRequestImage(selected);
+                    performClick();
+                }
+                return true;
+            }
+            case MotionEvent.ACTION_CANCEL:
+                draggingDivider = -1;
+                invalidate();
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    @Override
+    public boolean performClick() {
+        super.performClick();
+        return true;
+    }
+
+    private int hitTest(float x, float y) {
+        List<Path> paths = buildPaths(getWidth(), getHeight());
+        Region clip = new Region(0, 0, getWidth(), getHeight());
+        for (int i = preset.cells - 1; i >= 0; i--) {
+            Region r = new Region();
+            r.setPath(paths.get(i), clip);
+            if (r.contains((int) x, (int) y)) return i;
+        }
+        return -1;
+    }
+
+    private int hitDivider(float x, float y) {
+        List<DividerSegment> dividers = dividerSegments(getWidth(), getHeight());
+        float threshold = 28f * getResources().getDisplayMetrics().density;
+        int best = -1;
+        float bestDistance = threshold;
+        for (int i = 0; i < dividers.size(); i++) {
+            DividerSegment d = dividers.get(i);
+            float distance = distanceToSegment(x, y, d.x1, d.y1, d.x2, d.y2);

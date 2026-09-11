@@ -1,12 +1,11 @@
 name: Build FoldCollage APK
 
 on:
+  pull_request:
+    branches: [ main ]
   push:
     branches:
       - chatgpt/foldcollage-build
-    paths:
-      - 'foldcollage-src.zip'
-      - '.github/workflows/foldcollage-build.yml'
   workflow_dispatch:
 
 jobs:
@@ -30,11 +29,13 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Unpack FoldCollage source
+      - name: Assemble generated source
         run: |
-          rm -rf build-foldcollage
-          mkdir build-foldcollage
-          unzip -q foldcollage-src.zip -d build-foldcollage
+          mkdir -p foldcollage/app/src/main/java/com/aonon/foldcollage
+          cat foldcollage/srcparts/CollageView.java.part1 \
+              foldcollage/srcparts/CollageView.java.part2 \
+              foldcollage/srcparts/CollageView.java.part3 \
+              > foldcollage/app/src/main/java/com/aonon/foldcollage/CollageView.java
 
       - name: Ensure Android SDK 35
         run: |
@@ -42,12 +43,11 @@ jobs:
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build debug APK
-        working-directory: build-foldcollage/FoldCollage
+        working-directory: foldcollage
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: FoldCollage-debug-apk
-          path: build-foldcollage/FoldCollage/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          path: foldcollage/app/build/outputs/apk/debug/app-debug.apk
