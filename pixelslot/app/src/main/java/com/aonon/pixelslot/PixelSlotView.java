@@ -72,17 +72,18 @@ public class PixelSlotView extends View {
         float shake = currentShake(now, w);
         canvas.save();
         if (shake > 0f) {
-            float sx = (float) Math.sin(now / 13.0) * shake;
-            float sy = (float) Math.cos(now / 17.0) * shake * 0.65f;
+            float sx = (float) Math.sin(now / 11.0) * shake;
+            float sy = (float) Math.cos(now / 15.0) * shake * 0.68f;
             canvas.translate(sx, sy);
         }
         drawHeader(canvas, w, h);
         drawMachine(canvas, w, h, now);
-        drawSpinButton(canvas, w, h);
+        drawSpinButton(canvas, w, h, now);
         canvas.restore();
 
         if (reachTriggered && spinning) {
-            drawHypeEffects(canvas, w, h, now, false);
+            if (reachStage <= 2) drawOmen(canvas, w, h, now);
+            if (reachStage >= 2) drawHypeEffects(canvas, w, h, now, false);
         }
         if (now < celebrationUntil) {
             drawHypeEffects(canvas, w, h, now, true);
@@ -102,22 +103,34 @@ public class PixelSlotView extends View {
 
     private void drawBackground(Canvas canvas, int w, int h, long now) {
         paint.setAntiAlias(true);
-        int top = reachTriggered && spinning ? Color.rgb(72, 21, 86) : Color.rgb(41, 24, 64);
-        int bottom = now < celebrationUntil ? Color.rgb(58, 21, 25) : Color.rgb(20, 12, 35);
+        int top = Color.rgb(32, 21, 48);
+        int bottom = Color.rgb(14, 10, 24);
+
+        if (spinning && reachStage >= 3) {
+            top = Color.rgb(55 + Math.min(30, reachStage * 4), 16, 70);
+        }
+        if (now < celebrationUntil) {
+            top = Color.rgb(78, 18, 54);
+            bottom = Color.rgb(50, 15, 19);
+        }
+
         paint.setShader(new LinearGradient(0, 0, 0, h, top, bottom, Shader.TileMode.CLAMP));
         canvas.drawRect(0, 0, w, h, paint);
         paint.setShader(null);
 
-        paint.setColor(Color.argb(45, 255, 207, 236));
-        float r = w * 0.32f;
-        canvas.drawCircle(w * 0.12f, h * 0.16f, r, paint);
-        paint.setColor(Color.argb(28, 132, 222, 255));
-        canvas.drawCircle(w * 0.92f, h * 0.62f, r * 1.2f, paint);
+        // Normal play is intentionally quiet and restrained.
+        paint.setColor(Color.argb(18, 255, 207, 236));
+        float r = w * 0.29f;
+        canvas.drawCircle(w * 0.10f, h * 0.15f, r, paint);
+        paint.setColor(Color.argb(12, 132, 222, 255));
+        canvas.drawCircle(w * 0.94f, h * 0.65f, r * 1.15f, paint);
 
-        if (reachTriggered && spinning) {
-            float pulse = 0.5f + 0.5f * (float) Math.sin(now / 95.0);
-            paint.setColor(Color.argb((int) (28 + pulse * 34), 255, 71, 177));
-            canvas.drawCircle(w * 0.80f, h * 0.54f, w * (0.18f + pulse * 0.05f), paint);
+        if (reachTriggered && spinning && reachStage >= 2) {
+            float pulse = 0.5f + 0.5f * (float) Math.sin(now / (reachStage >= 5 ? 55.0 : 110.0));
+            int alpha = 8 + reachStage * 10 + (int) (pulse * reachStage * 5);
+            paint.setColor(Color.argb(Math.min(100, alpha), 255, 55, 170));
+            canvas.drawCircle(w * 0.80f, h * 0.54f,
+                    w * (0.12f + reachStage * 0.018f + pulse * 0.045f), paint);
         }
     }
 
@@ -130,12 +143,12 @@ public class PixelSlotView extends View {
         paint.setTextSize(w * 0.073f);
         canvas.drawText("PIXEL SLOT", w / 2f, h * 0.075f, paint);
 
-        paint.setColor(Color.rgb(214, 196, 230));
-        paint.setTextSize(w * 0.032f);
-        canvas.drawText("リーチからが本番。煽って、溜めて、ドカン！", w / 2f, h * 0.112f, paint);
+        paint.setColor(Color.rgb(192, 178, 207));
+        paint.setTextSize(w * 0.030f);
+        canvas.drawText("静か……と思ったら、そこから全部盛り。", w / 2f, h * 0.112f, paint);
 
         paint.setTextAlign(Paint.Align.LEFT);
-        paint.setColor(Color.rgb(245, 234, 255));
+        paint.setColor(Color.rgb(235, 226, 244));
         paint.setTextSize(w * 0.031f);
         canvas.drawText("SPIN  " + spins, w * 0.07f, h * 0.155f, paint);
         paint.setTextAlign(Paint.Align.RIGHT);
@@ -149,17 +162,18 @@ public class PixelSlotView extends View {
         float bottom = h * 0.73f;
 
         paint.setAntiAlias(true);
-        int machineAlpha = reachTriggered && spinning ? 245 : 225;
-        paint.setColor(Color.argb(machineAlpha, 65, 42, 88));
+        int machineAlpha = reachStage >= 4 && spinning ? 245 : 220;
+        paint.setColor(Color.argb(machineAlpha, 55, 37, 76));
         canvas.drawRoundRect(new RectF(left, top, right, bottom), w * 0.05f, w * 0.05f, paint);
 
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(w * (reachTriggered && spinning ? 0.013f : 0.008f));
-        if (reachTriggered && spinning) {
-            float p = 0.5f + 0.5f * (float) Math.sin(now / 75.0);
-            paint.setColor(Color.rgb(255, (int) (135 + p * 85), (int) (90 + p * 120)));
+        float stroke = reachStage >= 3 && spinning ? 0.008f + reachStage * 0.0012f : 0.0065f;
+        paint.setStrokeWidth(w * stroke);
+        if (reachStage >= 3 && spinning) {
+            float p = 0.5f + 0.5f * (float) Math.sin(now / Math.max(38.0, 100.0 - reachStage * 9.0));
+            paint.setColor(Color.rgb(255, (int) (110 + p * 110), (int) (70 + p * 140)));
         } else {
-            paint.setColor(Color.rgb(240, 169, 218));
+            paint.setColor(Color.rgb(188, 127, 177));
         }
         canvas.drawRoundRect(new RectF(left, top, right, bottom), w * 0.05f, w * 0.05f, paint);
         paint.setStyle(Paint.Style.FILL);
@@ -169,26 +183,30 @@ public class PixelSlotView extends View {
         boolean reaching = spinning && reachTriggered;
 
         for (int i = 0; i < 3; i++) {
-            float bob = (float) Math.sin((now / 210.0) + i * 1.5) * h * 0.004f;
+            float bob = (float) Math.sin((now / 360.0) + i * 1.5) * h * 0.0018f;
             float tremble = 0f;
-            if (reaching && i == 2) {
-                float power = 0.006f + Math.min(0.018f, reachStage * 0.0035f);
-                tremble = (float) Math.sin(now / (25.0 - reachStage * 2.2)) * w * power;
+            if (reaching && i == 2 && reachStage >= 3) {
+                float power = 0.003f + Math.min(0.024f, (reachStage - 2) * 0.005f);
+                tremble = (float) Math.sin(now / Math.max(8.0, 28.0 - reachStage * 3.1)) * w * power;
             }
 
             float jump = 0f;
             if (celebrating) {
-                float t = (now % 420L) / 420f;
-                jump = (float) -Math.abs(Math.sin(t * Math.PI)) * h * (0.034f + i * 0.006f);
+                float t = (now % 360L) / 360f;
+                jump = (float) -Math.abs(Math.sin(t * Math.PI)) * h * (0.040f + i * 0.007f);
             }
 
+            boolean cheerPose = celebrating || (reaching && reachStage >= 5 && i != 2);
             drawPixelGirl(canvas, centers[i] + tremble, h * 0.385f + bob + jump,
-                    w * 0.0105f, i, celebrating || (reaching && reachStage >= 4 && i != 2));
+                    w * 0.0105f, i, cheerPose);
 
             float scale = 1f;
             if (now < reelPulseUntil[i]) {
-                float remaining = (reelPulseUntil[i] - now) / 520f;
-                scale = 1f + 0.16f * (float) Math.sin((1f - remaining) * Math.PI);
+                float remaining = (reelPulseUntil[i] - now) / 720f;
+                scale = 1f + 0.19f * (float) Math.sin((1f - remaining) * Math.PI);
+            }
+            if (reaching && i == 2 && reachStage >= 5) {
+                scale *= 1f + 0.035f * (0.5f + 0.5f * (float) Math.sin(now / 47.0));
             }
             drawNumberCard(canvas, centers[i], h * 0.545f + jump * 0.30f,
                     w, h, shown[i], i, scale);
@@ -198,10 +216,10 @@ public class PixelSlotView extends View {
         if (reaching) {
             paint.setAntiAlias(true);
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setColor(Color.rgb(255, 236, 115));
-            paint.setTextSize(w * (0.045f + reachStage * 0.003f));
-            String label = reachStage >= 4 ? "まだ止まらないッ！！" : "リーチ…！";
-            canvas.drawText(label, w / 2f, h * 0.715f, paint);
+            String[] labels = {"", "……？", "もしかして…", "リーチ！！", "まだ続く…！", "激アツッ！！", "止まれぇぇぇ！！"};
+            paint.setColor(reachStage <= 2 ? Color.rgb(221, 211, 228) : Color.rgb(255, 236, 102));
+            paint.setTextSize(w * (0.034f + Math.max(0, reachStage - 1) * 0.006f));
+            canvas.drawText(labels[Math.min(reachStage, 6)], w / 2f, h * 0.715f, paint);
         }
     }
 
@@ -264,13 +282,13 @@ public class PixelSlotView extends View {
         RectF card = new RectF(cx - cw/2f, cy - ch/2f, cx + cw/2f, cy + ch/2f);
 
         paint.setAntiAlias(true);
-        paint.setShadowLayer(w * 0.025f, 0, h * 0.008f, Color.argb(120, 0, 0, 0));
-        paint.setColor(Color.rgb(252, 245, 255));
+        paint.setShadowLayer(w * 0.020f, 0, h * 0.006f, Color.argb(105, 0, 0, 0));
+        paint.setColor(Color.rgb(247, 241, 250));
         canvas.drawRoundRect(card, w * 0.035f, w * 0.035f, paint);
         paint.clearShadowLayer();
 
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(w * 0.008f);
+        paint.setStrokeWidth(w * 0.007f);
         paint.setColor(outfitColors[index]);
         canvas.drawRoundRect(card, w * 0.035f, w * 0.035f, paint);
         paint.setStyle(Paint.Style.FILL);
@@ -290,11 +308,11 @@ public class PixelSlotView extends View {
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
         paint.setTextSize(w * 0.031f);
-        paint.setColor(Color.rgb(229, 213, 239));
+        paint.setColor(Color.rgb(213, 199, 222));
         canvas.drawText(name, cx, y, paint);
     }
 
-    private void drawSpinButton(Canvas canvas, int w, int h) {
+    private void drawSpinButton(Canvas canvas, int w, int h, long now) {
         float bw = w * 0.64f;
         float bh = h * 0.105f;
         float cx = w / 2f;
@@ -302,28 +320,33 @@ public class PixelSlotView extends View {
         spinButton.set(cx - bw/2f, cy - bh/2f, cx + bw/2f, cy + bh/2f);
 
         paint.setAntiAlias(true);
-        paint.setShadowLayer(w * 0.025f, 0, h * 0.009f, Color.argb(140, 0, 0, 0));
-        if (spinning && reachTriggered) {
-            float p = 0.5f + 0.5f * (float) Math.sin(System.currentTimeMillis() / 80.0);
-            paint.setColor(Color.rgb(245, (int) (80 + p * 80), 124));
+        paint.setShadowLayer(w * 0.018f, 0, h * 0.006f, Color.argb(110, 0, 0, 0));
+        if (spinning && reachStage >= 4) {
+            float p = 0.5f + 0.5f * (float) Math.sin(now / Math.max(42.0, 95.0 - reachStage * 8.0));
+            paint.setColor(Color.rgb(245, (int) (65 + p * 95), 117));
         } else {
-            paint.setColor(spinning ? Color.rgb(122, 103, 141) : Color.rgb(242, 102, 171));
+            paint.setColor(spinning ? Color.rgb(92, 78, 108) : Color.rgb(219, 83, 148));
         }
         canvas.drawRoundRect(spinButton, bh/2f, bh/2f, paint);
         paint.clearShadowLayer();
 
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-        paint.setTextSize(w * 0.064f);
+        paint.setTextSize(w * 0.060f);
         paint.setColor(Color.WHITE);
         Paint.FontMetrics fm = paint.getFontMetrics();
         float baseline = cy - (fm.ascent + fm.descent) / 2f;
-        String label = spinning ? (reachTriggered ? "激アツ進行中…！" : "くるくる…") : "SPIN!";
+        String label;
+        if (!spinning) label = "SPIN!";
+        else if (reachStage <= 1) label = "……";
+        else if (reachStage == 2) label = "ん……？";
+        else if (reachStage <= 4) label = "来てる…！";
+        else label = "うわあああ！！";
         canvas.drawText(label, cx, baseline, paint);
 
-        paint.setTextSize(w * 0.028f);
-        paint.setColor(Color.rgb(200, 182, 216));
-        canvas.drawText("リーチに入ったら、ここからが長い。", cx, h * 0.925f, paint);
+        paint.setTextSize(w * 0.027f);
+        paint.setColor(Color.rgb(177, 163, 190));
+        canvas.drawText("普段は静か。来た時だけ全部盛り。", cx, h * 0.925f, paint);
     }
 
     private void updateGameState(long now) {
@@ -333,7 +356,7 @@ public class PixelSlotView extends View {
         boolean reachSpin = target[0] == target[1];
         long firstStop = 650L;
         long secondStop = 1000L;
-        long thirdStop = reachSpin ? 6000L : 1550L;
+        long thirdStop = reachSpin ? 9200L : 1550L;
 
         updateReel(0, e, firstStop, now, 58L);
         updateReel(1, e, secondStop, now, 62L);
@@ -341,9 +364,11 @@ public class PixelSlotView extends View {
         if (e < thirdStop) {
             long interval = 55L;
             if (reachSpin && e >= secondStop) {
-                if (e >= 5000L) interval = 175L;
-                else if (e >= 4000L) interval = 125L;
-                else if (e >= 2800L) interval = 92L;
+                if (e >= 8500L) interval = 260L;
+                else if (e >= 7600L) interval = 190L;
+                else if (e >= 6500L) interval = 135L;
+                else if (e >= 5100L) interval = 105L;
+                else if (e >= 3700L) interval = 84L;
                 else interval = 68L;
             }
             shown[2] = (int) ((e / interval + 6L) % 10L);
@@ -351,29 +376,35 @@ public class PixelSlotView extends View {
             shown[2] = target[2];
             if (!reelLocked[2]) {
                 reelLocked[2] = true;
-                reelPulseUntil[2] = now + 700L;
+                reelPulseUntil[2] = now + 950L;
             }
         }
 
+        // Slow burn: the first part of a reach is intentionally almost silent.
         if (reachSpin && !reachTriggered && e >= secondStop) {
             reachTriggered = true;
             reachStage = 1;
-            triggerCutIn(now, 1000L, 1, "リーチ！！", "ここからやで…！ まだ止まらへん！");
+            triggerCutIn(now, 850L, 7, "……ん？", "今、ふたり揃った……？");
         }
-
-        if (reachSpin && reachStage < 2 && e >= 2200L) {
+        if (reachSpin && reachStage < 2 && e >= 2400L) {
             reachStage = 2;
-            triggerCutIn(now, 900L, 4, "まだ回るっ！", "ミオ、数字を離さないでーっ！");
+            triggerCutIn(now, 950L, 8, "もしかして…", "ミオだけ、まだ回ってる……");
         }
-
-        if (reachSpin && reachStage < 3 && e >= 3500L) {
+        if (reachSpin && reachStage < 3 && e >= 3700L) {
             reachStage = 3;
-            triggerCutIn(now, 1000L, 5, "熱くなってきた！", "キラキラ増量！ これは期待してええやつ！");
+            triggerCutIn(now, 1150L, 1, "リーチ！！", "ここからやで旦那はん……！");
         }
-
-        if (reachSpin && reachStage < 4 && e >= 4800L) {
+        if (reachSpin && reachStage < 4 && e >= 5100L) {
             reachStage = 4;
-            triggerCutIn(now, 1050L, 6, "決めてぇぇぇ！！", "旦那はん、見てて！ ここで止まってーーっ！");
+            triggerCutIn(now, 1100L, 4, "まだ終わらないッ！", "回る、回る……まだ止まらへん！！");
+        }
+        if (reachSpin && reachStage < 5 && e >= 6500L) {
+            reachStage = 5;
+            triggerCutIn(now, 1250L, 5, "激アツッ！！！", "これ来てる！ 全部光ってるぅぅ！！");
+        }
+        if (reachSpin && reachStage < 6 && e >= 7900L) {
+            reachStage = 6;
+            triggerCutIn(now, 1450L, 6, "止まれぇぇぇぇ！！！", "旦那はん見てて！ ここ！ ここで止まってぇぇ！！");
         }
 
         if (!resultTriggered && e >= thirdStop) {
@@ -384,10 +415,10 @@ public class PixelSlotView extends View {
             if (jackpot) {
                 wins++;
                 celebrationStart = now;
-                celebrationUntil = now + 5200L;
-                triggerCutIn(now, 2500L, 2, "大当たりィィィ！！！", "やったぁぁ！ 旦那はん、ほんまにすごーい！！");
+                celebrationUntil = now + 6500L;
+                triggerCutIn(now, 3300L, 2, "大当たりィィィィ！！！！！", "やったぁぁぁ！ 旦那はん最強ーーーっ！！");
             } else if (reachSpin) {
-                triggerCutIn(now, 1500L, 3, "うわぁぁぁ惜しい！", "あとひとつやったぁ…！ 次、絶対いこ！");
+                triggerCutIn(now, 1800L, 3, "うわぁぁぁ惜しい！！", "そこまで行ったのにぃ！ 次、絶対いこ！！");
             }
         }
     }
@@ -399,7 +430,7 @@ public class PixelSlotView extends View {
             shown[index] = target[index];
             if (!reelLocked[index]) {
                 reelLocked[index] = true;
-                reelPulseUntil[index] = now + 600L;
+                reelPulseUntil[index] = now + 720L;
             }
         }
     }
@@ -463,124 +494,186 @@ public class PixelSlotView extends View {
         float exit = t > 0.86f ? Math.max(0f, (1f - t) / 0.14f) : 1f;
         float visible = Math.min(enter, exit);
 
-        boolean huge = cutInType >= 5 || cutInType == 2;
-        float top = huge ? h * 0.205f : h * 0.245f;
-        float bottom = huge ? h * 0.445f : h * 0.405f;
-        float slide = (1f - visible) * w * (cutInType % 2 == 0 ? -0.95f : 0.95f);
+        boolean whisper = cutInType == 7 || cutInType == 8;
+        boolean huge = cutInType >= 5 && cutInType <= 6 || cutInType == 2;
+        float top = whisper ? h * 0.285f : (huge ? h * 0.185f : h * 0.235f);
+        float bottom = whisper ? h * 0.395f : (huge ? h * 0.465f : h * 0.415f);
+        float slide = whisper ? (1f - visible) * w * 0.18f
+                : (1f - visible) * w * (cutInType % 2 == 0 ? -0.95f : 0.95f);
 
         int accent = cutInAccent(cutInType);
 
         canvas.save();
         canvas.translate(slide, 0f);
         if (cutInType == 6) {
-            float wobble = (float) Math.sin(now / 40.0) * 0.018f;
-            canvas.rotate(wobble * 180f / (float) Math.PI, w / 2f, (top + bottom) / 2f);
+            float wobble = (float) Math.sin(now / 31.0) * 1.8f;
+            canvas.rotate(wobble, w / 2f, (top + bottom) / 2f);
         }
 
         paint.setAntiAlias(true);
-        paint.setColor(Color.argb(245, 24, 12, 40));
+        paint.setColor(Color.argb(whisper ? 180 : 247, 21, 10, 36));
         canvas.drawRect(-w * 0.05f, top, w * 1.05f, bottom, paint);
 
         paint.setColor(accent);
-        canvas.drawRect(0, top, w, top + h * 0.010f, paint);
-        canvas.drawRect(0, bottom - h * 0.010f, w, bottom, paint);
+        float edge = whisper ? h * 0.004f : h * 0.011f;
+        canvas.drawRect(0, top, w, top + edge, paint);
+        canvas.drawRect(0, bottom - edge, w, bottom, paint);
 
-        for (int i = 0; i < 12; i++) {
-            float x = ((i * 97 + now / 8) % 1200L) / 1200f * w;
-            paint.setColor(Color.argb(80, Color.red(accent), Color.green(accent), Color.blue(accent)));
-            canvas.drawRect(x, top, x + w * 0.012f, bottom, paint);
+        if (!whisper) {
+            int stripeCount = huge ? 24 : 13;
+            for (int i = 0; i < stripeCount; i++) {
+                float x = ((i * 97 + now / 7) % 1200L) / 1200f * w;
+                paint.setColor(Color.argb(huge ? 105 : 65,
+                        Color.red(accent), Color.green(accent), Color.blue(accent)));
+                canvas.drawRect(x, top, x + w * (huge ? 0.018f : 0.011f), bottom, paint);
+            }
         }
 
         int girlIndex = cutInType == 2 ? 0 : (cutInType == 3 ? 1 : 2);
-        float girlScale = huge ? w * 0.0165f : w * 0.0135f;
-        drawPixelGirl(canvas, w * 0.17f, (top + bottom) * 0.5f,
-                girlScale, girlIndex, cutInType == 2 || cutInType >= 5);
+        float girlScale = whisper ? w * 0.0105f : (huge ? w * 0.0175f : w * 0.0135f);
+        drawPixelGirl(canvas, whisper ? w * 0.20f : w * 0.17f, (top + bottom) * 0.5f,
+                girlScale, girlIndex, cutInType == 2 || cutInType >= 5 && cutInType <= 6);
 
         paint.setTextAlign(Paint.Align.LEFT);
         paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
         paint.setColor(accent);
-        paint.setTextSize(w * (huge ? 0.078f : 0.067f));
-        canvas.drawText(cutInTitle, w * 0.31f, top + h * (huge ? 0.095f : 0.067f), paint);
+        paint.setTextSize(w * (whisper ? 0.050f : (huge ? 0.084f : 0.067f)));
+        canvas.drawText(cutInTitle, w * 0.31f, top + h * (whisper ? 0.048f : huge ? 0.108f : 0.075f), paint);
 
         paint.setColor(Color.WHITE);
-        paint.setTextSize(w * (huge ? 0.039f : 0.036f));
-        canvas.drawText(cutInMessage, w * 0.31f, top + h * (huge ? 0.155f : 0.116f), paint);
+        paint.setTextSize(w * (whisper ? 0.030f : (huge ? 0.039f : 0.035f)));
+        canvas.drawText(cutInMessage, w * 0.31f, top + h * (whisper ? 0.088f : huge ? 0.173f : 0.128f), paint);
 
         if (cutInType == 6 || cutInType == 2) {
             paint.setTextAlign(Paint.Align.RIGHT);
-            paint.setTextSize(w * 0.18f);
-            paint.setColor(Color.argb(85, 255, 255, 255));
-            canvas.drawText("!!!", w * 0.98f, bottom - h * 0.015f, paint);
+            paint.setTextSize(w * 0.22f);
+            paint.setColor(Color.argb(105, 255, 255, 255));
+            canvas.drawText("!!!", w * 0.99f, bottom - h * 0.010f, paint);
         }
-
         canvas.restore();
 
-        if (cutInType >= 5 || cutInType == 2) {
+        if (cutInType == 6 || cutInType == 2) {
             float flash = (float) Math.sin(t * Math.PI);
-            paint.setColor(Color.argb((int) (90 * flash), 255, 255, 255));
+            paint.setColor(Color.argb((int) (125 * flash), 255, 255, 255));
             canvas.drawRect(0, 0, w, h, paint);
         }
     }
 
     private int cutInAccent(int type) {
-        if (type == 2) return Color.rgb(255, 218, 74);
+        if (type == 2) return Color.rgb(255, 222, 64);
         if (type == 3) return Color.rgb(138, 197, 255);
-        if (type == 4) return Color.rgb(143, 239, 255);
-        if (type == 5) return Color.rgb(255, 134, 64);
-        if (type == 6) return Color.rgb(255, 61, 128);
+        if (type == 4) return Color.rgb(139, 236, 255);
+        if (type == 5) return Color.rgb(255, 122, 44);
+        if (type == 6) return Color.rgb(255, 42, 112);
+        if (type == 7) return Color.rgb(207, 195, 216);
+        if (type == 8) return Color.rgb(215, 195, 240);
         return Color.rgb(255, 105, 181);
+    }
+
+    private void drawOmen(Canvas canvas, int w, int h, long now) {
+        // Barely-there signs before the real reach explodes.
+        float pulse = 0.5f + 0.5f * (float) Math.sin(now / 310.0);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setAntiAlias(true);
+        paint.setStrokeWidth(w * 0.003f);
+        paint.setColor(Color.argb((int) (20 + pulse * 30), 235, 215, 255));
+        canvas.drawCircle(w * 0.80f, h * 0.545f, w * (0.13f + pulse * 0.015f), paint);
+        if (reachStage >= 2) {
+            paint.setStrokeWidth(w * 0.004f);
+            paint.setColor(Color.argb((int) (22 + pulse * 35), 255, 142, 214));
+            canvas.drawCircle(w * 0.80f, h * 0.545f, w * (0.17f + pulse * 0.02f), paint);
+        }
+        paint.setStyle(Paint.Style.FILL);
     }
 
     private void drawHypeEffects(Canvas canvas, int w, int h, long now, boolean victory) {
         float cx = victory ? w * 0.5f : w * 0.80f;
         float cy = h * 0.53f;
-        int stage = victory ? 6 : Math.max(1, reachStage);
-        int lines = victory ? 42 : 12 + stage * 5;
+        int stage = victory ? 7 : Math.max(1, reachStage);
+
+        int[] lineCounts = {0, 0, 4, 15, 28, 46, 72, 92};
+        int[] particleCounts = {0, 0, 4, 18, 34, 62, 100, 132};
+        int lines = lineCounts[Math.min(stage, 7)];
+        int particles = particleCounts[Math.min(stage, 7)];
 
         paint.setAntiAlias(true);
         paint.setStyle(Paint.Style.STROKE);
         for (int i = 0; i < lines; i++) {
-            double a = i * (Math.PI * 2.0 / lines) + now / (victory ? 420.0 : 690.0);
-            float inner = w * (0.11f + (i % 4) * 0.012f);
-            float outer = w * (0.27f + stage * 0.018f + (i % 3) * 0.018f);
+            double a = i * (Math.PI * 2.0 / Math.max(1, lines)) + now / (victory ? 260.0 : Math.max(260.0, 820.0 - stage * 75.0));
+            float inner = w * (0.10f + (i % 4) * 0.010f);
+            float outer = w * (0.22f + stage * 0.030f + (i % 3) * 0.025f);
             float x1 = cx + (float) Math.cos(a) * inner;
             float y1 = cy + (float) Math.sin(a) * inner;
             float x2 = cx + (float) Math.cos(a) * outer;
             float y2 = cy + (float) Math.sin(a) * outer;
-            int alpha = victory ? 135 : 45 + stage * 16;
-            int c = i % 3 == 0 ? Color.rgb(255, 228, 92)
-                    : (i % 3 == 1 ? Color.rgb(255, 77, 173) : Color.rgb(112, 229, 255));
+            int alpha = victory ? 160 : Math.min(185, 18 + stage * 25);
+            int c = i % 4 == 0 ? Color.rgb(255, 234, 78)
+                    : (i % 4 == 1 ? Color.rgb(255, 61, 164)
+                    : (i % 4 == 2 ? Color.rgb(103, 228, 255) : Color.rgb(255, 255, 255)));
             paint.setColor(Color.argb(alpha, Color.red(c), Color.green(c), Color.blue(c)));
-            paint.setStrokeWidth(w * (0.003f + (i % 3) * 0.0015f));
+            paint.setStrokeWidth(w * (0.0025f + (i % 4) * 0.0014f));
             canvas.drawLine(x1, y1, x2, y2, paint);
         }
         paint.setStyle(Paint.Style.FILL);
 
-        int particles = victory ? 48 : 10 + stage * 7;
         paint.setAntiAlias(false);
         for (int i = 0; i < particles; i++) {
-            long seed = i * 173L + now / (victory ? 8L : 13L);
+            long seed = i * 173L + now / (victory ? 5L : Math.max(6L, 18L - stage * 2L));
             float x = ((seed * 37L) % 1000L) / 1000f * w;
-            float y = h * 0.18f + (((seed * 91L) % 1000L) / 1000f) * h * 0.58f;
-            float s = w * (0.004f + (i % 5) * 0.0015f);
-            int c = i % 3 == 0 ? Color.rgb(255, 231, 90)
-                    : (i % 3 == 1 ? Color.rgb(255, 113, 194) : Color.rgb(125, 230, 255));
-            block(canvas, x, y, s, s * 2f, c);
+            float y = h * 0.14f + (((seed * 91L) % 1000L) / 1000f) * h * 0.66f;
+            float s = w * (0.004f + (i % 6) * 0.0018f);
+            int c = i % 4 == 0 ? Color.rgb(255, 231, 72)
+                    : (i % 4 == 1 ? Color.rgb(255, 92, 187)
+                    : (i % 4 == 2 ? Color.rgb(104, 229, 255) : Color.WHITE));
+            block(canvas, x, y, s, s * (1.6f + (i % 3)), c);
         }
         paint.setAntiAlias(true);
 
-        float pulse = 0.5f + 0.5f * (float) Math.sin(now / (victory ? 48.0 : 85.0));
-        int alpha = victory ? (int) (25 + pulse * 55) : (int) (8 + pulse * stage * 6);
-        paint.setColor(Color.argb(Math.min(100, alpha), 255, victory ? 225 : 84, victory ? 125 : 195));
-        canvas.drawRect(0, 0, w, h, paint);
+        if (stage >= 4) {
+            float pulse = 0.5f + 0.5f * (float) Math.sin(now / (victory ? 35.0 : Math.max(35.0, 95.0 - stage * 9.0)));
+            int alpha = victory ? (int) (28 + pulse * 80) : (int) ((stage - 3) * 9 + pulse * stage * 7);
+            paint.setColor(Color.argb(Math.min(125, alpha), 255, victory ? 226 : 62, victory ? 100 : 174));
+            canvas.drawRect(0, 0, w, h, paint);
+        }
 
         if (!victory && stage >= 3) {
             paint.setTextAlign(Paint.Align.CENTER);
             paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            paint.setTextSize(w * (0.034f + stage * 0.004f));
-            paint.setColor(Color.argb(180, 255, 241, 120));
-            canvas.drawText(stage >= 4 ? "MAX CHANCE" : "CHANCE UP", w * 0.80f, h * 0.25f, paint);
+            paint.setTextSize(w * (0.032f + stage * 0.006f));
+            paint.setColor(Color.argb(205, 255, 243, 102));
+            String hype = stage == 3 ? "CHANCE" : stage == 4 ? "CHANCE UP" : stage == 5 ? "激アツ" : "MAXIMUM!!!";
+            canvas.drawText(hype, w * 0.80f, h * 0.25f, paint);
         }
+
+        if (stage >= 6) {
+            drawMaximumBurst(canvas, w, h, now, victory);
+        }
+    }
+
+    private void drawMaximumBurst(Canvas canvas, int w, int h, long now, boolean victory) {
+        float cx = victory ? w * 0.50f : w * 0.80f;
+        float cy = h * 0.54f;
+        float pulse = 0.5f + 0.5f * (float) Math.sin(now / 42.0);
+
+        paint.setAntiAlias(true);
+        paint.setStyle(Paint.Style.STROKE);
+        for (int ring = 0; ring < 4; ring++) {
+            float rr = w * (0.15f + ring * 0.075f + pulse * 0.035f);
+            paint.setStrokeWidth(w * (0.010f - ring * 0.0015f));
+            int alpha = 150 - ring * 25;
+            paint.setColor(Color.argb(alpha, ring % 2 == 0 ? 255 : 115, 225, ring % 2 == 0 ? 90 : 255));
+            canvas.drawCircle(cx, cy, rr, paint);
+        }
+        paint.setStyle(Paint.Style.FILL);
+
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        paint.setTextSize(w * (victory ? 0.23f : 0.16f));
+        paint.setColor(Color.argb((int) (45 + pulse * 65), 255, 255, 255));
+        canvas.save();
+        canvas.rotate((float) Math.sin(now / 90.0) * 4f, w / 2f, h / 2f);
+        canvas.drawText(victory ? "WIN!!! WIN!!!" : "!!!  !!!  !!!", w / 2f, h * 0.48f, paint);
+        canvas.restore();
     }
 
     private void drawReelPulses(Canvas canvas, int w, int h, long now) {
@@ -589,40 +682,44 @@ public class PixelSlotView extends View {
         paint.setAntiAlias(true);
         for (int i = 0; i < 3; i++) {
             if (now >= reelPulseUntil[i]) continue;
-            float left = Math.max(0f, (reelPulseUntil[i] - now) / 700f);
+            float left = Math.max(0f, (reelPulseUntil[i] - now) / 950f);
             float progress = 1f - left;
-            float radius = w * (0.12f + progress * 0.10f);
-            paint.setStrokeWidth(w * 0.010f * (1f - progress * 0.6f));
-            paint.setColor(Color.argb((int) (180 * (1f - progress)),
-                    255, i == 2 ? 220 : 153, i == 2 ? 95 : 225));
-            canvas.drawCircle(centers[i], h * 0.545f, radius, paint);
+            for (int ring = 0; ring < 2; ring++) {
+                float radius = w * (0.11f + progress * 0.15f + ring * 0.035f);
+                paint.setStrokeWidth(w * 0.009f * (1f - progress * 0.6f));
+                paint.setColor(Color.argb((int) (190 * (1f - progress)),
+                        255, i == 2 ? 221 : 150, i == 2 ? 80 : 225));
+                canvas.drawCircle(centers[i], h * 0.545f, radius, paint);
+            }
         }
         paint.setStyle(Paint.Style.FILL);
     }
 
     private void drawSparkles(Canvas canvas, int w, int h, long now) {
         paint.setAntiAlias(false);
-        for (int i = 0; i < 54; i++) {
-            float phase = ((now / 9L + i * 71L) % 1000L) / 1000f;
+        for (int i = 0; i < 112; i++) {
+            float phase = ((now / 6L + i * 71L) % 1000L) / 1000f;
             float x = ((i * 173) % 997) / 997f * w;
-            float y = h * 0.15f + phase * h * 0.64f;
-            float s = w * (0.006f + (i % 5) * 0.002f);
-            int c = (i % 3 == 0) ? Color.rgb(255, 221, 90)
-                    : (i % 3 == 1) ? Color.rgb(255, 134, 199)
-                    : Color.rgb(135, 225, 255);
-            block(canvas, x, y, s, s * 2f, c);
-            block(canvas, x - s/2f, y + s/2f, s * 2f, s, c);
+            float y = h * 0.12f + phase * h * 0.70f;
+            float s = w * (0.005f + (i % 6) * 0.002f);
+            int c = (i % 4 == 0) ? Color.rgb(255, 221, 70)
+                    : (i % 4 == 1) ? Color.rgb(255, 110, 196)
+                    : (i % 4 == 2) ? Color.rgb(120, 229, 255) : Color.WHITE;
+            block(canvas, x, y, s, s * 2.2f, c);
+            block(canvas, x - s/2f, y + s*0.6f, s * 2f, s, c);
         }
         paint.setAntiAlias(true);
     }
 
     private float currentShake(long now, int w) {
         if (spinning && reachTriggered) {
-            return w * (0.0015f + reachStage * 0.0012f);
+            if (reachStage <= 2) return 0f;
+            float[] powers = {0f, 0f, 0f, 0.0015f, 0.0030f, 0.0055f, 0.0090f};
+            return w * powers[Math.min(reachStage, 6)];
         }
-        if (now < celebrationUntil && now - celebrationStart < 1300L) {
-            float fade = 1f - (now - celebrationStart) / 1300f;
-            return w * 0.012f * Math.max(0f, fade);
+        if (now < celebrationUntil && now - celebrationStart < 1700L) {
+            float fade = 1f - (now - celebrationStart) / 1700f;
+            return w * 0.017f * Math.max(0f, fade);
         }
         return 0f;
     }
