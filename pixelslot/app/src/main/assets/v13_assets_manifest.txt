@@ -1,0 +1,7 @@
+PixelSlot v0.13 asset set
+momo_full_v13.webp 941x1672 RGB 115436 bytes
+luna_full_v13.webp 941x1672 RGB 220418 bytes
+mio_full_v13.webp 941x1672 RGB 172434 bytes
+momo_sd_idle_v13.webp 512x768 RGBA 141224 bytes
+luna_sd_idle_v13.webp 512x768 RGBA 148456 bytes
+mio_sd_idle_v13.webp 512x768 RGBA 145136 bytes
