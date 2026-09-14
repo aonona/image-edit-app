@@ -1,0 +1,1 @@
+Step 2 staging in progress. Do not use direct v13 webp files yet. Canonical bundle: 944124 bytes, SHA256 bec3402c7248d20863f1d7a430f4722890eb1aa126116e2d19a95913138bafaf. Upload method: Git blobs in v13_bundle_parts, then one tree commit.
