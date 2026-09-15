@@ -197,7 +197,7 @@ public class PixelSlotV9View extends PixelSlotV8View {
         RectF d=new RectF(cx-dw/2f,baseline-dh,cx+dw/2f,baseline); c.drawBitmap(b,null,d,bp); return d;
     }
 
-    private void drawDigit(Canvas c,RectF d,int ch,int number) {
+    protected void drawDigit(Canvas c,RectF d,int ch,int number) {
         float[] b=boards[ch]; RectF r=new RectF(d.left+d.width()*b[0],d.top+d.height()*b[1],d.left+d.width()*b[2],d.top+d.height()*b[3]);
         float size=Math.min(r.height()*.72f,r.width()*.62f); p.setTypeface(Typeface.create(Typeface.MONOSPACE,Typeface.BOLD));p.setTextSize(size);p.setTextAlign(Paint.Align.CENTER);
         Paint.FontMetrics fm=p.getFontMetrics();float y=r.centerY()-(fm.ascent+fm.descent)/2f;
