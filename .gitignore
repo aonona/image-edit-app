@@ -1,0 +1,4 @@
+PixelSlot-*-debug.apk
+pixelslot/.gradle/
+pixelslot/**/build/
+pixelslot/local.properties
